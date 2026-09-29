@@ -14,7 +14,7 @@ Il codice è organizzato a motori (`src/audyum/engines/`): aggiungere un altro m
 
 ## Requisiti
 
-Windows 10 o 11 a 64 bit, scheda NVIDIA con almeno 8 GB di VRAM (il riferimento è una RTX 3080 Ti da 12 GB), driver recente, circa 20 GB liberi su disco e connessione a internet per la prima installazione. Senza GPU NVIDIA il programma funziona sulla CPU, ma una clip di pochi secondi richiede diversi minuti.
+Windows 10 o 11 a 64 bit, scheda NVIDIA con almeno 8 GB di VRAM (il riferimento è una RTX 3080 Ti da 12 GB), driver recente, circa 15 GB liberi sul disco C: durante l'installazione (dopo se ne usano circa 12) e connessione a internet per la prima installazione. Senza GPU NVIDIA il programma funziona sulla CPU, ma una clip di pochi secondi richiede diversi minuti.
 
 ## Installazione
 
