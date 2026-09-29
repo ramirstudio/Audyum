@@ -13,6 +13,8 @@ rem rifiuta i collegamenti che uv crea (errore 448). Primo tentativo in AppData\
 rem Resti di un tentativo precedente fallito (collegamenti non attraversabili): si rimuovono.
 if exist "%~dp0python" rmdir /s /q "%~dp0python" >nul 2>&1
 if exist "%~dp0.venv" rmdir /s /q "%~dp0.venv" >nul 2>&1
+rem Giunzioni lasciate da versioni di uv piu' recenti: uv 0.7 le trova e fallisce. Via tutto.
+for %%D in ("%LOCALAPPDATA%\Audyum\uv" "%PUBLIC%\Audyum\uv") do if exist "%%~D" rmdir /s /q "%%~D" >nul 2>&1
 
 set "UV_PROJECT_ENVIRONMENT=%~dp0.venv"
 set "UV_LINK_MODE=copy"
