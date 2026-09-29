@@ -26,7 +26,11 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      # uv 0.8+ crea giunzioni per la cartella di Python che Windows rifiuta su alcuni PC (errore 448):
+      # l'installer include uv 0.7.22, che non le crea.
       - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.7.22"
 
       - name: Blocca le versioni delle dipendenze
         run: uv lock
