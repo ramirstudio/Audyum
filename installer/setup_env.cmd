@@ -20,14 +20,20 @@ set "UV_PYTHON_PREFERENCE=only-managed"
 set "FROZEN="
 if exist "%~dp0uv.lock" set "FROZEN=--frozen"
 
-set "UVROOT=%LOCALAPPDATA%\Audyum\uv"
+rem Cartelle usate dalle versioni precedenti: dentro ci sono collegamenti che Windows non legge piu'.
+if exist "%LOCALAPPDATA%\Audyum\uv" rmdir /s /q "%LOCALAPPDATA%\Audyum\uv" >nul 2>&1
+if exist "%PUBLIC%\Audyum\uv" rmdir /s /q "%PUBLIC%\Audyum\uv" >nul 2>&1
+
+set "UVROOT=%LOCALAPPDATA%\Audyum\py"
+if exist "%UVROOT%" rmdir /s /q "%UVROOT%" >nul 2>&1
 call :sync
 if not errorlevel 1 goto ok
 
 echo.
 echo  Primo tentativo non riuscito, riprovo in una cartella diversa.
 echo.
-set "UVROOT=%PUBLIC%\Audyum\uv"
+set "UVROOT=%PUBLIC%\Audyum\py"
+if exist "%UVROOT%" rmdir /s /q "%UVROOT%" >nul 2>&1
 call :sync
 if not errorlevel 1 goto ok
 
