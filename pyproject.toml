@@ -1,0 +1,53 @@
+[project]
+name = "audyum"
+version = "0.1.0"
+description = "Genera con l'IA, in locale, l'audio di un video muto"
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+  "torch==2.8.0",
+  "torchvision==0.23.0",
+  "torchaudio==2.8.0",
+  # MMAudio non è su PyPI: commit fissato, scaricato come archivio (non serve git sul PC).
+  "mmaudio @ https://github.com/hkchengrex/MMAudio/archive/974010a026c731054592d8f777218bd9d85a6c24.zip",
+  "av>=14.0.1",
+  "numpy>=1.24,<2.1",
+  "huggingface_hub>=1.0",
+  "requests>=2.31",
+  "tqdm>=4.66",
+  "PySide6-Essentials>=6.7",
+]
+
+[project.scripts]
+audyum-cli = "audyum.cli:main"
+
+[project.gui-scripts]
+audyum = "audyum.gui.app:main"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/audyum"]
+
+# Wheel CUDA 12.8: coprono dalle RTX 20xx alle RTX 50xx (Blackwell).
+[tool.uv.sources]
+torch = { index = "pytorch-cu128", marker = "sys_platform != 'darwin'" }
+torchvision = { index = "pytorch-cu128", marker = "sys_platform != 'darwin'" }
+torchaudio = { index = "pytorch-cu128", marker = "sys_platform != 'darwin'" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

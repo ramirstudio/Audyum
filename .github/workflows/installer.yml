@@ -1,0 +1,57 @@
+name: Installer Windows
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Test senza GPU (motore finto)
+        run: |
+          uv venv --python 3.11
+          uv pip install "av>=14.0.1" "numpy<2.1" pytest
+          .venv/bin/python -m pytest -q
+
+  installer:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Blocca le versioni delle dipendenze
+        run: uv lock
+
+      - name: Verifica che l'ambiente si installi su Windows
+        run: |
+          uv sync --frozen --no-dev --python 3.11
+          uv run --no-sync python -c "import torch, torchaudio, mmaudio, av, PySide6.QtMultimedia; from audyum.engines.mmaudio_engine import MMAudioEngine; from mmaudio.model.networks import get_my_mmaudio; print(torch.__version__, torch.version.cuda)"
+
+      - name: Compila l'installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force installer\bin | Out-Null
+          Copy-Item (Get-Command uv).Source installer\bin\uv.exe
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          $version = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}".TrimStart("v") } else { "0.1.0" }
+          & $iscc "/DAppVersion=$version" installer\audyum.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Audyum-Setup
+          path: dist/*.exe
+
+      - if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.exe
