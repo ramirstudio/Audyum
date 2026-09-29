@@ -14,6 +14,7 @@ AppPublisher=Audyum
 DefaultDirName={localappdata}\Programs\Audyum
 DefaultGroupName=Audyum
 DisableProgramGroupPage=yes
+DisableDirPage=no
 PrivilegesRequired=lowest
 OutputDir=..\dist
 OutputBaseFilename=Audyum-Setup-{#AppVersion}
@@ -51,7 +52,7 @@ Filename: "{app}\.venv\Scripts\pythonw.exe"; Parameters: "-m audyum"; WorkingDir
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\.venv"
-Type: filesandordirs; Name: "{app}\python"
+Type: filesandordirs; Name: "{app}\portable.txt"
 Type: filesandordirs; Name: "{app}\src"
 
 [Code]
@@ -75,7 +76,7 @@ var
 begin
   if CurUninstallStep = usPostUninstall then
   begin
-    Data := ExpandConstant('{localappdata}\Audyum');
+    Data := ExpandConstant('{app}\data');
     if DirExists(Data) then
       if MsgBox('Eliminare anche i modelli scaricati (circa 10 GB) in ' + Data + '?',
                 mbConfirmation, MB_YESNO) = IDYES then

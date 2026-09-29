@@ -8,9 +8,16 @@ import sys
 from pathlib import Path
 
 
+def install_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
 def app_home() -> Path:
     if os.environ.get("AUDYUM_HOME"):
         return Path(os.environ["AUDYUM_HOME"])
+    # Installata con l'installer: modelli e log stanno nella cartella scelta, non su C:.
+    if (install_root() / "portable.txt").exists():
+        return install_root() / "data"
     if sys.platform == "win32" and os.environ.get("LOCALAPPDATA"):
         return Path(os.environ["LOCALAPPDATA"]) / "Audyum"
     return Path.home() / ".local" / "share" / "Audyum"
