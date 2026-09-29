@@ -10,6 +10,10 @@ echo.
 rem Il venv e i pacchetti stanno nella cartella di installazione. Python gestito da uv va invece
 rem fuori da qualsiasi cartella che OneDrive possa toccare: con Files On-Demand attivo Windows
 rem rifiuta i collegamenti che uv crea (errore 448). Primo tentativo in AppData\Local, poi in Public.
+rem Resti di un tentativo precedente fallito (collegamenti non attraversabili): si rimuovono.
+if exist "%~dp0python" rmdir /s /q "%~dp0python" >nul 2>&1
+if exist "%~dp0.venv" rmdir /s /q "%~dp0.venv" >nul 2>&1
+
 set "UV_PROJECT_ENVIRONMENT=%~dp0.venv"
 set "UV_LINK_MODE=copy"
 set "UV_PYTHON_PREFERENCE=only-managed"
