@@ -7,17 +7,20 @@ con più varianti le feature di ogni finestra si calcolano una volta sola.
 from __future__ import annotations
 
 import dataclasses
+import logging
+import os
 import threading
 from typing import Callable, Optional
 
 import numpy as np
 
-from audyum.downloads import HFFile, ProgressFn, URLFile, fetch
+from audyum.downloads import HFFile, ProgressFn, URLFile, fetch, heal_hf_cache
 from audyum.engines.base import Engine, GenerationParams
 from audyum.media import Cancelled, FrameSpec
 from audyum.paths import models_dir
 
 _RELEASE = "https://github.com/hkchengrex/MMAudio/releases/download/v0.1/"
+log = logging.getLogger(__name__)
 
 VARIANTS = {
     "large_44k_v2": "MMAudio L v2 · qualità massima",
@@ -66,10 +69,12 @@ class MMAudioEngine(Engine):
         ]
 
     def ensure_weights(self, progress: ProgressFn, cancel: Optional[threading.Event] = None) -> None:
+        heal_hf_cache()  # file già scaricati con collegamenti che Windows non apre: si rendono file veri
         files = self._files()
         for i, (key, item) in enumerate(files, 1):
             step = f" ({i}/{len(files)})"
             self._paths[key] = fetch(item, lambda msg, f: progress(msg + step, f), cancel)
+        heal_hf_cache()
 
     def load(self, progress: ProgressFn) -> None:
         import torch
@@ -87,7 +92,14 @@ class MMAudioEngine(Engine):
 
         progress("Carico MMAudio in memoria", None)
         net = get_my_mmaudio(self.variant).to(device, dtype).eval()
-        net.load_weights(torch.load(self._paths["model"], map_location=device, weights_only=True))
+        try:
+            state = torch.load(self._paths["model"], map_location=device, weights_only=True)
+        except OSError:
+            path = str(self._paths["model"])
+            log.error("Apertura dei pesi non riuscita: islink=%s exists=%s isfile=%s", os.path.islink(path),
+                      os.path.exists(path), os.path.isfile(path))
+            raise
+        net.load_weights(state)
         progress("Carico CLIP, Synchformer e il vocoder", None)
         fu = FeaturesUtils(
             tod_vae_ckpt=str(self._paths["vae"]),

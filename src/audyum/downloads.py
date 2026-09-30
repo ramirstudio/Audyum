@@ -5,11 +5,13 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import os
+import shutil
 import threading
 from pathlib import Path
 from typing import Callable, Optional
 
 from audyum.media import Cancelled
+from audyum.paths import hf_home
 
 ProgressFn = Callable[[str, Optional[float]], None]
 
@@ -55,6 +57,34 @@ def _tqdm_class(label: str, progress: ProgressFn, cancel: Optional[threading.Eve
     return _Bar
 
 
+def heal_hf_cache(hub: Path | None = None) -> int:
+    """Sostituisce con file veri i collegamenti simbolici della cache Hugging Face.
+
+    Alcuni PC Windows rifiutano di aprire i collegamenti (errore 22 o 448). Il file vero è un hardlink
+    al blob già scaricato (nessun GB in più sul disco, nessun nuovo download); se l'hardlink non è
+    possibile si copia. Restituisce quanti collegamenti sono stati sostituiti.
+    """
+    hub = hub or (hf_home() / "hub")
+    fixed = 0
+    for folder, _dirs, files in os.walk(hub):
+        if os.sep + "snapshots" + os.sep not in folder + os.sep:
+            continue
+        for name in files:
+            link = os.path.join(folder, name)
+            if not os.path.islink(link):
+                continue
+            blob = os.path.normpath(os.path.join(folder, os.readlink(link)))
+            if not os.path.isfile(blob):
+                continue
+            os.unlink(link)
+            try:
+                os.link(blob, link)
+            except OSError:
+                shutil.copy2(blob, link)
+            fixed += 1
+    return fixed
+
+
 def fetch_hf(item: HFFile, progress: ProgressFn, cancel: Optional[threading.Event] = None) -> Path:
     from huggingface_hub import hf_hub_download
     from huggingface_hub.errors import EntryNotFoundError
@@ -66,7 +96,9 @@ def fetch_hf(item: HFFile, progress: ProgressFn, cancel: Optional[threading.Even
             except Exception:
                 pass
             progress(f"Scarico {item.label}", None)
-            return Path(hf_hub_download(item.repo_id, name, tqdm_class=_tqdm_class(item.label, progress, cancel)))
+            path = Path(hf_hub_download(item.repo_id, name, tqdm_class=_tqdm_class(item.label, progress, cancel)))
+            heal_hf_cache()
+            return path
         except EntryNotFoundError:
             if i == len(item.filenames) - 1:
                 raise
