@@ -25,15 +25,31 @@ set "UV_CACHE_DIR=%UVROOT%\cache"
 set "UV_PROJECT_ENVIRONMENT=%~dp0.venv"
 set "UV_PYTHON_PREFERENCE=only-managed"
 set "UV_LINK_MODE=hardlink"
+rem Connessioni lente: timeout lungo, pochi download in parallelo, piu' tentativi per ogni file.
+set "UV_HTTP_TIMEOUT=600"
+set "UV_CONCURRENT_DOWNLOADS=3"
+set "UV_HTTP_RETRIES=8"
 set "FROZEN="
 if exist "%~dp0uv.lock" set "FROZEN=--frozen"
 
+rem Fino a 4 tentativi: ogni volta riparte dai pacchetti gia' scaricati.
+set "TRY=0"
+:retry
+set /a TRY+=1
 "%~dp0bin\uv.exe" sync %FROZEN% --no-dev --python 3.11
 if not errorlevel 1 goto ok
+if %TRY% LSS 4 (
+  echo.
+  echo  Tentativo %TRY% di 4 non riuscito, riprovo tra 10 secondi.
+  echo.
+  timeout /t 10 /nobreak >nul
+  goto retry
+)
 
 echo.
 echo  Preparazione non riuscita.
 echo  Se l'errore parla di "spazio su disco insufficiente" libera almeno 15 GB sul disco di installazione.
+echo  Se parla di timeout o di rete, riprova piu' tardi o con una connessione migliore.
 echo  Poi riprova da menu Start, "Audyum - ripara installazione": riparte dai file gia' scaricati.
 echo.
 pause
