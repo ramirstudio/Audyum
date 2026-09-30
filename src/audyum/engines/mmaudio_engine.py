@@ -42,13 +42,14 @@ class MMAudioEngine(Engine):
     max_window = 8  # MMAudio è addestrato su clip di 8 secondi
     license_note = "Pesi MMAudio sotto licenza CC BY-NC 4.0: solo uso non commerciale."
 
-    def __init__(self, variant: str = "large_44k_v2", device: Optional[str] = None):
+    def __init__(self, variant: str = "large_44k_v2", device: Optional[str] = None, full_precision: bool = True):
         if variant not in VARIANTS:
             raise ValueError(f"Variante MMAudio sconosciuta: {variant}")
         self.variant = variant
         self.id = f"mmaudio:{variant}"
         self.label = VARIANTS[variant]
         self._device = device
+        self.full_precision = full_precision
         self._paths: dict[str, object] = {}
         self._net = None
         self._fu = None
@@ -95,13 +96,13 @@ class MMAudioEngine(Engine):
         from mmaudio.model.utils.features_utils import FeaturesUtils
 
         device = self._device or ("cuda" if torch.cuda.is_available() else "cpu")
+        # Precisione piena (float32): il decoder audio e il vocoder generano la forma d'onda e in bfloat16
+        # (8 bit di mantissa) l'audio esce sporco e metallico. La modalità veloce usa bfloat16 (RTX 30xx in su).
+        fast_ok = device == "cuda" and torch.cuda.get_device_capability()[0] >= 8
+        dtype = torch.bfloat16 if (not self.full_precision and fast_ok) else torch.float32
         if device == "cuda":
-            torch.backends.cuda.matmul.allow_tf32 = True
-            torch.backends.cudnn.allow_tf32 = True
-            # bf16 nativo da Ampere (RTX 30xx) in su; prima si resta in fp32.
-            dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float32
-        else:
-            dtype = torch.float32
+            torch.backends.cuda.matmul.allow_tf32 = True  # matmul del transformer: TF32 è più che sufficiente
+            torch.backends.cudnn.allow_tf32 = not self.full_precision  # convoluzioni del vocoder: float32 vero
 
         progress("Carico MMAudio in memoria", None)
         net = get_my_mmaudio(self.variant).to(device, dtype).eval()

@@ -111,7 +111,7 @@ class MainWindow(QMainWindow):
         self.video: Path | None = None
         self.out_dir: Path | None = None
         self.results: list[VariantResult] = []
-        self._engines: dict[str, engines.Engine] = {}
+        self._engines: dict[tuple, engines.Engine] = {}
         self._thread: QThread | None = None
         self._worker: JobWorker | None = None
         self._cancel = threading.Event()
@@ -236,7 +236,7 @@ class MainWindow(QMainWindow):
         self.prompt = QPlainTextEdit()
         self.prompt.setPlaceholderText("Descrizione facoltativa, in inglese. Esempio: heavy rain on a car roof")
         self.prompt.setFixedHeight(72)
-        self.negative = QLineEdit()
+        self.negative = QLineEdit("music, speech")
         self.negative.setPlaceholderText("Da evitare, in inglese. Esempio: music, speech")
         g.addWidget(self.prompt)
         g.addWidget(self.negative)
@@ -285,7 +285,7 @@ class MainWindow(QMainWindow):
         adv, g = self._group()
         self.steps = QSpinBox()
         self.steps.setRange(8, 100)
-        self.steps.setValue(25)
+        self.steps.setValue(40)
         self.guidance = QDoubleSpinBox()
         self.guidance.setRange(1.0, 12.0)
         self.guidance.setSingleStep(0.5)
@@ -300,6 +300,8 @@ class MainWindow(QMainWindow):
         self.overlap.setSuffix(" s")
         self.normalize = QCheckBox()
         self.normalize.setChecked(True)
+        self.precision = QCheckBox()
+        self.precision.setChecked(True)
         rows = [("Passi", self.steps), ("Aderenza al video", self.guidance), ("Finestra", self.window),
                 ("Sovrapposizione", self.overlap)]
         for i, (label, w) in enumerate(rows):
@@ -310,6 +312,8 @@ class MainWindow(QMainWindow):
             g.addLayout(self._row(label, w))
         g.addWidget(self._sep())
         g.addLayout(self._row("Picco a -1 dBFS", self.normalize))
+        g.addWidget(self._sep())
+        g.addLayout(self._row("Precisione piena (audio più pulito, più lento)", self.precision))
         adv.setVisible(False)
         self.adv_btn.toggled.connect(lambda on: (adv.setVisible(on), self.adv_btn.setText(
             "Nascondi parametri avanzati" if on else "Mostra parametri avanzati")))
@@ -377,7 +381,7 @@ class MainWindow(QMainWindow):
         self.save_wav_btn.setEnabled(has_result)
         self.open_dir_btn.setEnabled(bool(self.results))
         for w in (self.model, self.prompt, self.negative, self.variants, self.steps, self.guidance,
-                  self.window, self.overlap):
+                  self.window, self.overlap, self.precision):
             w.setEnabled(not busy)
 
     def _on_position(self, pos: int) -> None:
@@ -488,13 +492,13 @@ class MainWindow(QMainWindow):
     # ---- generazione ----------------------------------------------------------------------
 
     def _engine(self) -> engines.Engine:
-        key = self.model.currentData()
+        key = (self.model.currentData(), self.precision.isChecked())
         for other, eng in list(self._engines.items()):
             if other != key:  # un solo modello in VRAM alla volta
                 eng.unload()
                 del self._engines[other]
         if key not in self._engines:
-            self._engines[key] = engines.create(key)
+            self._engines[key] = engines.create(key[0], full_precision=key[1])
         return self._engines[key]
 
     def _start(self) -> None:

@@ -18,7 +18,7 @@ from audyum.timeline import finalize, fit_length, plan_windows, stitch
 class JobSettings:
     prompt: str = ""
     negative_prompt: str = ""
-    steps: int = 25
+    steps: int = 40
     guidance: float = 4.5
     variants: int = 1
     seed: Optional[int] = None  # None: casuale

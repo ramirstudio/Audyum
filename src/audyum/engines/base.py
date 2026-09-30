@@ -15,7 +15,7 @@ from audyum.media import FrameSpec
 class GenerationParams:
     prompt: str = ""
     negative_prompt: str = ""
-    steps: int = 25
+    steps: int = 40
     guidance: float = 4.5
 
 

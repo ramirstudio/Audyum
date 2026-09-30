@@ -22,17 +22,18 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("-o", "--out", type=Path, help="cartella di uscita (predefinita: <cartella del video>/Audyum)")
     p.add_argument("--model", default=engines.DEFAULT_PRESET, choices=list(engines.PRESETS))
     p.add_argument("--prompt", default="", help="descrizione dei suoni, in inglese")
-    p.add_argument("--negative", default="", help="suoni da evitare, in inglese")
+    p.add_argument("--negative", default="music, speech", help="suoni da evitare, in inglese")
     p.add_argument("--variants", type=int, default=1)
     p.add_argument("--seed", type=int)
-    p.add_argument("--steps", type=int, default=25)
+    p.add_argument("--steps", type=int, default=40)
     p.add_argument("--guidance", type=float, default=4.5)
     p.add_argument("--window", type=int, default=8)
     p.add_argument("--overlap", type=int, default=1)
     p.add_argument("--no-normalize", action="store_true")
+    p.add_argument("--fast", action="store_true", help="bfloat16: più veloce, audio meno pulito")
     a = p.parse_args(argv)
 
-    engine = engines.create(a.model)
+    engine = engines.create(a.model, full_precision=not a.fast)
     settings = JobSettings(a.prompt, a.negative, a.steps, a.guidance, a.variants, a.seed, a.window, a.overlap,
                            not a.no_normalize)
 
