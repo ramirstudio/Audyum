@@ -1,4 +1,4 @@
-"""Tema: antracite caldo, un solo accento ossido. Titoli in Instrument Serif, testo in Instrument Sans."""
+"""Tema in stile iOS scuro: fondo nero, gruppi arrotondati, accento blu di sistema, interruttori."""
 
 from __future__ import annotations
 
@@ -7,55 +7,97 @@ from pathlib import Path
 from PySide6.QtGui import QFont, QFontDatabase
 from PySide6.QtWidgets import QApplication
 
-_FONTS = Path(__file__).parent / "fonts"
+_HERE = Path(__file__).parent
+_FONTS = _HERE / "fonts"
+ICONS = _HERE / "icons"
 
 C = {
-    "bg": "#161412",
-    "field": "#221f1b",
-    "line": "#36302a",
-    "text": "#ebe3d5",
-    "muted": "#968c7d",
-    "faint": "#5c544a",
-    "accent": "#d65f38",
-    "accent_hover": "#e3724c",
-    "accent_text": "#180d08",
-    "selected": "#3b2a21",
-    "video": "#0d0c0b",
+    "bg": "#000000",
+    "group": "#1C1C1E",
+    "field": "#2C2C2E",
+    "field_hover": "#3A3A3C",
+    "sep": "#38383A",
+    "text": "#FFFFFF",
+    "secondary": "#8E8E93",
+    "tertiary": "#48484A",
+    "tint": "#0A84FF",
+    "tint_pressed": "#0070E0",
+    "icons": ICONS.as_posix(),
 }
 
 QSS = """
 QWidget {{ background: {bg}; color: {text}; font-family: "Instrument Sans"; font-size: 10.5pt; }}
-QLabel#wordmark {{ font-family: "Instrument Serif"; font-size: 32pt; }}
-QLabel#section {{ font-family: "Instrument Serif"; font-size: 17pt; padding-top: 14px; }}
-QLabel#muted, QCheckBox#muted {{ color: {muted}; font-size: 9.5pt; }}
-QLabel#dropHint {{ color: {muted}; font-family: "Instrument Serif"; font-size: 22pt; background: {video}; }}
-QFrame#videoFrame {{ background: {video}; border: 1px solid {line}; }}
-QPlainTextEdit, QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QListWidget {{
-    background: {field}; border: 1px solid {line}; border-radius: 3px; padding: 5px 7px;
-    selection-background-color: {accent}; selection-color: {accent_text};
+QLabel {{ background: transparent; }}
+QLabel#wordmark {{ font-size: 26pt; font-weight: 700; }}
+QLabel#section {{ color: {secondary}; font-size: 9.5pt; padding: 14px 0 2px 14px; }}
+QLabel#muted, QCheckBox#muted {{ color: {secondary}; font-size: 9.5pt; }}
+QLabel#footnote {{ color: {secondary}; font-size: 9pt; padding: 0 14px; }}
+QLabel#rowLabel {{ font-size: 10.5pt; }}
+QLabel#dropHint {{ color: {secondary}; font-size: 15pt; font-weight: 600; background: {group}; border-radius: 16px; }}
+
+QFrame#group {{ background: {group}; border-radius: 12px; }}
+QFrame#group QWidget {{ background: transparent; }}
+QFrame#group QFrame#sep, QFrame#sep {{ background: {sep}; max-height: 1px; min-height: 1px; }}
+QFrame#videoFrame {{ background: {group}; border-radius: 16px; }}
+
+QPlainTextEdit, QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {{
+    background: {field}; border: none; border-radius: 9px; padding: 7px 10px;
+    selection-background-color: {tint}; selection-color: {text};
+}}
+QFrame#group QPlainTextEdit, QFrame#group QLineEdit, QFrame#group QSpinBox,
+QFrame#group QDoubleSpinBox, QFrame#group QComboBox {{ background: {field}; }}
+QSpinBox:disabled, QDoubleSpinBox:disabled, QLineEdit:disabled, QPlainTextEdit:disabled, QComboBox:disabled {{
+    color: {tertiary};
 }}
 QAbstractSpinBox::up-button, QAbstractSpinBox::down-button {{ width: 0; border: none; }}
-QPlainTextEdit:focus, QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {{ border-color: {accent}; }}
-QComboBox QAbstractItemView {{ background: {field}; border: 1px solid {line}; selection-background-color: {selected}; }}
-QListWidget::item {{ padding: 6px 4px; }}
-QListWidget::item:selected {{ background: {selected}; color: {text}; }}
-QPushButton {{ background: {field}; border: 1px solid {line}; border-radius: 3px; padding: 7px 14px; }}
-QPushButton:hover {{ border-color: {muted}; }}
-QPushButton:disabled {{ color: {faint}; border-color: {line}; }}
-QPushButton#primary {{ background: {accent}; color: {accent_text}; border: none; font-weight: 600; padding: 10px 18px; }}
-QPushButton#primary:hover {{ background: {accent_hover}; }}
-QPushButton#primary:disabled {{ background: {line}; color: {faint}; }}
-QToolButton#disclosure {{ border: none; color: {muted}; padding: 8px 0; text-align: left; }}
-QToolButton#disclosure:hover {{ color: {text}; }}
-QProgressBar {{ background: {field}; border: none; max-height: 4px; }}
-QProgressBar::chunk {{ background: {accent}; }}
-QSlider::groove:horizontal {{ height: 3px; background: {line}; }}
-QSlider::sub-page:horizontal {{ background: {accent}; }}
-QSlider::handle:horizontal {{ background: {text}; width: 11px; margin: -4px 0; border-radius: 5px; }}
+QComboBox::drop-down {{ border: none; width: 26px; }}
+QComboBox::down-arrow {{ image: url({icons}/chevron_down.svg); width: 12px; height: 12px; }}
+QComboBox QAbstractItemView {{
+    background: {field}; border: none; border-radius: 10px; padding: 4px;
+    selection-background-color: {field_hover}; outline: 0;
+}}
+
+QPushButton {{
+    background: {field}; color: {tint}; border: none; border-radius: 10px;
+    padding: 9px 14px; font-weight: 600;
+}}
+QPushButton:hover {{ background: {field_hover}; }}
+QPushButton:disabled {{ color: {tertiary}; background: {group}; }}
+QPushButton#primary {{
+    background: {tint}; color: {text}; border-radius: 12px; padding: 13px 18px; font-size: 11pt;
+}}
+QPushButton#primary:hover {{ background: {tint_pressed}; }}
+QPushButton#primary:disabled {{ background: {field}; color: {tertiary}; }}
+QPushButton#plain {{ background: transparent; color: {tint}; padding: 9px 6px; }}
+QPushButton#plain:hover {{ color: #409CFF; }}
+QPushButton#plain:disabled {{ color: {tertiary}; }}
+QPushButton#round {{ background: {field}; border-radius: 20px; padding: 0; }}
+QPushButton#round:hover {{ background: {field_hover}; }}
+
+QToolButton#disclosure {{ border: none; color: {tint}; padding: 10px 0 0 14px; font-weight: 600; background: transparent; }}
+
+QCheckBox {{ spacing: 10px; background: transparent; }}
+QCheckBox::indicator {{ width: 46px; height: 28px; }}
+QCheckBox::indicator:unchecked {{ image: url({icons}/switch_off.svg); }}
+QCheckBox::indicator:checked {{ image: url({icons}/switch_on.svg); }}
+QCheckBox::indicator:checked:disabled {{ image: url({icons}/switch_on_disabled.svg); }}
+
+QProgressBar {{ background: {field}; border: none; border-radius: 2px; max-height: 4px; }}
+QProgressBar::chunk {{ background: {tint}; border-radius: 2px; }}
+
+QSlider::groove:horizontal {{ height: 4px; background: {field_hover}; border-radius: 2px; }}
+QSlider::sub-page:horizontal {{ background: {text}; border-radius: 2px; }}
+QSlider::handle:horizontal {{ background: {text}; width: 18px; height: 18px; margin: -7px 0; border-radius: 9px; }}
+
+QListWidget {{ background: transparent; border: none; outline: 0; }}
+QListWidget::item {{ padding: 10px 6px; border-bottom: 1px solid {sep}; color: {text}; }}
+QListWidget::item:selected {{ background: {field}; color: {tint}; border-radius: 8px; }}
+
 QScrollArea {{ border: none; }}
 QScrollBar:vertical {{ background: {bg}; width: 8px; }}
-QScrollBar::handle:vertical {{ background: {line}; border-radius: 4px; min-height: 30px; }}
+QScrollBar::handle:vertical {{ background: {field_hover}; border-radius: 4px; min-height: 30px; }}
 QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
+QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
 """.format(**C)
 
 

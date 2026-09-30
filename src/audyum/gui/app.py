@@ -125,7 +125,7 @@ class MainWindow(QMainWindow):
 
     def _build_player(self) -> QVBoxLayout:
         col = QVBoxLayout()
-        col.setSpacing(12)
+        col.setSpacing(14)
         mark = QLabel("Audyum")
         mark.setObjectName("wordmark")
         col.addWidget(mark)
@@ -146,9 +146,15 @@ class MainWindow(QMainWindow):
         self.player.setAudioOutput(self.audio_out)
         self.player.setVideoOutput(self.video_widget)
 
+        self._icon_play = QIcon(str(theme.ICONS / "play.svg"))
+        self._icon_pause = QIcon(str(theme.ICONS / "pause.svg"))
         transport = QHBoxLayout()
-        self.play_btn = QPushButton("Riproduci")
-        self.play_btn.setFixedWidth(110)
+        transport.setSpacing(14)
+        self.play_btn = QPushButton()
+        self.play_btn.setObjectName("round")
+        self.play_btn.setFixedSize(40, 40)
+        self.play_btn.setIcon(self._icon_play)
+        self.play_btn.setToolTip("Riproduci")
         self.play_btn.clicked.connect(self._toggle_play)
         self.seek = QSlider(Qt.Horizontal)
         self.seek.sliderMoved.connect(self.player.setPosition)
@@ -162,7 +168,7 @@ class MainWindow(QMainWindow):
         self.player.durationChanged.connect(lambda d: (self.seek.setRange(0, d), self._update_time()))
         self.player.positionChanged.connect(self._on_position)
         self.player.playbackStateChanged.connect(
-            lambda s: self.play_btn.setText("Pausa" if s == QMediaPlayer.PlayingState else "Riproduci"))
+            lambda s: self.play_btn.setIcon(self._icon_pause if s == QMediaPlayer.PlayingState else self._icon_play))
         return col
 
     def _section(self, text: str) -> QLabel:
@@ -170,79 +176,110 @@ class MainWindow(QMainWindow):
         lbl.setObjectName("section")
         return lbl
 
-    def _muted(self, text: str = "") -> QLabel:
+    def _muted(self, text: str = "", name: str = "muted") -> QLabel:
         lbl = QLabel(text)
-        lbl.setObjectName("muted")
+        lbl.setObjectName(name)
         lbl.setWordWrap(True)
         return lbl
+
+    def _group(self) -> tuple[QFrame, QVBoxLayout]:
+        box = QFrame()
+        box.setObjectName("group")
+        lay = QVBoxLayout(box)
+        lay.setContentsMargins(14, 12, 14, 12)
+        lay.setSpacing(10)
+        return box, lay
+
+    def _sep(self) -> QFrame:
+        line = QFrame()
+        line.setObjectName("sep")
+        return line
+
+    def _row(self, label: str, *widgets) -> QHBoxLayout:
+        row = QHBoxLayout()
+        lbl = QLabel(label)
+        lbl.setObjectName("rowLabel")
+        row.addWidget(lbl, 1)
+        for w in widgets:
+            row.addWidget(w)
+        return row
 
     def _build_panel(self) -> QScrollArea:
         panel = QWidget()
         col = QVBoxLayout(panel)
         col.setContentsMargins(0, 0, 10, 0)
-        col.setSpacing(8)
+        col.setSpacing(6)
 
         col.addWidget(self._section("Video"))
-        self.file_lbl = self._muted("Nessun file")
+        box, g = self._group()
+        self.file_lbl = QLabel("Nessun file")
+        self.file_lbl.setWordWrap(True)
+        g.addWidget(self.file_lbl)
+        g.addWidget(self._sep())
+        self.out_lbl = self._muted("")
+        g.addWidget(self.out_lbl)
+        btns = QHBoxLayout()
         open_btn = QPushButton("Apri video…")
         open_btn.clicked.connect(self._choose_video)
-        self.out_lbl = self._muted("")
-        out_btn = QPushButton("Cambia cartella di uscita…")
-        out_btn.clicked.connect(self._choose_out_dir)
-        self.out_btn = out_btn
-        col.addWidget(self.file_lbl)
-        col.addWidget(open_btn)
-        col.addWidget(self.out_lbl)
-        col.addWidget(out_btn)
+        self.out_btn = QPushButton("Cambia cartella…")
+        self.out_btn.clicked.connect(self._choose_out_dir)
+        btns.addWidget(open_btn, 1)
+        btns.addWidget(self.out_btn, 1)
+        g.addLayout(btns)
+        col.addWidget(box)
 
         col.addWidget(self._section("Suoni"))
+        box, g = self._group()
         self.prompt = QPlainTextEdit()
-        self.prompt.setPlaceholderText("Facoltativa, in inglese. Esempio: heavy rain on a car roof, distant thunder")
-        self.prompt.setFixedHeight(76)
+        self.prompt.setPlaceholderText("Descrizione facoltativa, in inglese. Esempio: heavy rain on a car roof")
+        self.prompt.setFixedHeight(72)
         self.negative = QLineEdit()
         self.negative.setPlaceholderText("Da evitare, in inglese. Esempio: music, speech")
-        col.addWidget(self.prompt)
-        col.addWidget(self.negative)
-        col.addWidget(self._muted("Senza descrizione il modello decide dai soli fotogrammi."))
+        g.addWidget(self.prompt)
+        g.addWidget(self.negative)
+        col.addWidget(box)
+        col.addWidget(self._muted("Senza descrizione il modello decide dai soli fotogrammi.", "footnote"))
 
         col.addWidget(self._section("Modello"))
+        box, g = self._group()
         self.model = QComboBox()
         for key, (label, _) in engines.PRESETS.items():
             self.model.addItem(label, key)
         self.model.setCurrentIndex(self.model.findData(engines.DEFAULT_PRESET))
-        col.addWidget(self.model)
-        col.addWidget(self._muted("Pesi MMAudio sotto licenza CC BY-NC 4.0: uso non commerciale. "
-                                  "Al primo utilizzo vengono scaricati circa 10 GB."))
-
-        form = QFormLayout()
-        form.setHorizontalSpacing(14)
+        g.addWidget(self.model)
+        g.addWidget(self._sep())
         self.variants = QSpinBox()
         self.variants.setRange(1, 6)
+        self.variants.setFixedWidth(90)
+        self.variants.setAlignment(Qt.AlignRight)
+        g.addLayout(self._row("Varianti", self.variants))
+        g.addWidget(self._sep())
+        self.random_seed = QCheckBox()
+        self.random_seed.setChecked(True)
+        g.addLayout(self._row("Seme casuale", self.random_seed))
         self.seed = QSpinBox()
         self.seed.setRange(0, 2**31 - 1)
         self.seed.setValue(42)
-        self.random_seed = QCheckBox("casuale")
-        self.random_seed.setObjectName("muted")
-        self.random_seed.setChecked(True)
-        self.random_seed.toggled.connect(lambda on: self.seed.setEnabled(not on))
+        self.seed.setFixedWidth(140)
+        self.seed.setAlignment(Qt.AlignRight)
         self.seed.setEnabled(False)
-        seed_row = QHBoxLayout()
-        seed_row.addWidget(self.seed, 1)
-        seed_row.addWidget(self.random_seed)
-        form.addRow("Varianti", self.variants)
-        form.addRow("Seme", seed_row)
-        col.addLayout(form)
+        seed_row_w = QWidget()
+        seed_row = self._row("Seme", self.seed)
+        seed_row.setContentsMargins(0, 0, 0, 0)
+        seed_row_w.setLayout(seed_row)
+        seed_row_w.setVisible(False)
+        self.random_seed.toggled.connect(lambda on: (self.seed.setEnabled(not on), seed_row_w.setVisible(not on)))
+        g.addWidget(seed_row_w)
+        col.addWidget(box)
+        col.addWidget(self._muted("Pesi MMAudio sotto licenza CC BY-NC 4.0, uso non commerciale. "
+                                  "Al primo utilizzo vengono scaricati circa 10 GB.", "footnote"))
 
         self.adv_btn = QToolButton()
         self.adv_btn.setObjectName("disclosure")
-        self.adv_btn.setText("Parametri avanzati")
+        self.adv_btn.setText("Mostra parametri avanzati")
         self.adv_btn.setCheckable(True)
-        self.adv_btn.setArrowType(Qt.RightArrow)
-        self.adv_btn.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         col.addWidget(self.adv_btn)
-        adv = QWidget()
-        adv_form = QFormLayout(adv)
-        adv_form.setContentsMargins(0, 0, 0, 0)
+        adv, g = self._group()
         self.steps = QSpinBox()
         self.steps.setRange(8, 100)
         self.steps.setValue(25)
@@ -258,58 +295,67 @@ class MainWindow(QMainWindow):
         self.overlap.setRange(1, 3)
         self.overlap.setValue(1)
         self.overlap.setSuffix(" s")
-        self.normalize = QCheckBox("Porta il picco a -1 dBFS")
+        self.normalize = QCheckBox()
         self.normalize.setChecked(True)
-        adv_form.addRow("Passi", self.steps)
-        adv_form.addRow("Aderenza al video", self.guidance)
-        adv_form.addRow("Finestra", self.window)
-        adv_form.addRow("Sovrapposizione", self.overlap)
-        adv_form.addRow("", self.normalize)
+        rows = [("Passi", self.steps), ("Aderenza al video", self.guidance), ("Finestra", self.window),
+                ("Sovrapposizione", self.overlap)]
+        for i, (label, w) in enumerate(rows):
+            w.setFixedWidth(90)
+            w.setAlignment(Qt.AlignRight)
+            if i:
+                g.addWidget(self._sep())
+            g.addLayout(self._row(label, w))
+        g.addWidget(self._sep())
+        g.addLayout(self._row("Picco a -1 dBFS", self.normalize))
         adv.setVisible(False)
-        self.adv_btn.toggled.connect(lambda on: (adv.setVisible(on),
-                                                 self.adv_btn.setArrowType(Qt.DownArrow if on else Qt.RightArrow)))
+        self.adv_btn.toggled.connect(lambda on: (adv.setVisible(on), self.adv_btn.setText(
+            "Nascondi parametri avanzati" if on else "Mostra parametri avanzati")))
         col.addWidget(adv)
 
-        col.addSpacing(10)
-        buttons = QHBoxLayout()
+        col.addSpacing(14)
         self.gen_btn = QPushButton("Genera audio")
         self.gen_btn.setObjectName("primary")
         self.gen_btn.clicked.connect(self._start)
-        self.cancel_btn = QPushButton("Annulla")
-        self.cancel_btn.clicked.connect(self._cancel_job)
-        buttons.addWidget(self.gen_btn, 1)
-        buttons.addWidget(self.cancel_btn)
-        col.addLayout(buttons)
+        col.addWidget(self.gen_btn)
         self.bar = QProgressBar()
         self.bar.setTextVisible(False)
         self.bar.setRange(0, 1000)
         self.bar.setValue(0)
+        status_row = QHBoxLayout()
         self.status = self._muted("")
+        self.cancel_btn = QPushButton("Annulla")
+        self.cancel_btn.setObjectName("plain")
+        self.cancel_btn.clicked.connect(self._cancel_job)
+        status_row.addWidget(self.status, 1)
+        status_row.addWidget(self.cancel_btn)
         col.addWidget(self.bar)
-        col.addWidget(self.status)
+        col.addLayout(status_row)
 
         col.addWidget(self._section("Risultati"))
+        box, g = self._group()
+        g.setContentsMargins(8, 6, 8, 10)
         self.result_list = QListWidget()
-        self.result_list.setMinimumHeight(120)
+        self.result_list.setMinimumHeight(150)
         self.result_list.currentRowChanged.connect(self._preview_row)
-        col.addWidget(self.result_list)
+        g.addWidget(self.result_list)
         row = QHBoxLayout()
         self.save_video_btn = QPushButton("Salva video…")
         self.save_video_btn.clicked.connect(lambda: self._save_selected(video=True))
         self.save_wav_btn = QPushButton("Salva WAV…")
         self.save_wav_btn.clicked.connect(lambda: self._save_selected(video=False))
-        self.open_dir_btn = QPushButton("Apri cartella")
+        self.open_dir_btn = QPushButton("Cartella")
         self.open_dir_btn.clicked.connect(self._open_out_dir)
         row.addWidget(self.save_video_btn)
         row.addWidget(self.save_wav_btn)
         row.addWidget(self.open_dir_btn)
-        col.addLayout(row)
+        g.addLayout(row)
+        col.addWidget(box)
         col.addStretch(1)
 
         scroll = QScrollArea()
         scroll.setWidget(panel)
         scroll.setWidgetResizable(True)
-        scroll.setFixedWidth(410)
+        scroll.setFixedWidth(420)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         return scroll
 
@@ -373,9 +419,9 @@ class MainWindow(QMainWindow):
         self.out_dir = path.parent / "Audyum"
         self.results = []
         note = " · contiene già una traccia audio, verrà sostituita" if info.has_audio else ""
-        self.file_lbl.setText(f"{path.name}\n{info.width}×{info.height}, {info.fps:.2f} fps, "
+        self.file_lbl.setText(f"{path.name}\n{info.width}×{info.height} · {info.fps:.2f} fps · "
                               f"{info.duration:.1f} s{note}")
-        self.out_lbl.setText(f"Uscita: {self.out_dir}")
+        self.out_lbl.setText(f"Salva in {self.out_dir}")
         self.result_list.clear()
         QListWidgetItem("Originale", self.result_list)
         self.result_list.setCurrentRow(0)
@@ -385,7 +431,7 @@ class MainWindow(QMainWindow):
         path = QFileDialog.getExistingDirectory(self, "Cartella di uscita", str(self.out_dir or ""))
         if path:
             self.out_dir = Path(path)
-            self.out_lbl.setText(f"Uscita: {self.out_dir}")
+            self.out_lbl.setText(f"Salva in {self.out_dir}")
 
     def _preview_row(self, row: int) -> None:
         if row < 0 or self.video is None:
