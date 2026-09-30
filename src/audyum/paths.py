@@ -45,6 +45,7 @@ def configure_environment() -> None:
     os.environ.setdefault("HF_HOME", str(hf_home()))
     # Su alcuni PC Windows i collegamenti simbolici non si possono aprire (errore 22/448): file veri.
     os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS", "1")
+    os.environ.setdefault("HF_HUB_DISABLE_XET", "1")  # download classico: file scritti in modo normale
     os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
     os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 

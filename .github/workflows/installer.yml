@@ -18,7 +18,7 @@ jobs:
       - name: Test senza GPU (motore finto)
         run: |
           uv venv --python 3.11
-          uv pip install "av>=14.0.1" "numpy<2.1" pytest
+          uv pip install "av>=14.0.1" "numpy<2.1" requests pytest
           .venv/bin/python -m pytest -q
 
   installer:

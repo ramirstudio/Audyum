@@ -8,19 +8,25 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-import os
 import threading
+from unittest import mock
 from typing import Callable, Optional
 
 import numpy as np
 
-from audyum.downloads import HFFile, ProgressFn, URLFile, fetch, heal_hf_cache
+from audyum.downloads import ProgressFn, URLFile, describe_path, fetch_url, remove_old_hf_cache
 from audyum.engines.base import Engine, GenerationParams
 from audyum.media import Cancelled, FrameSpec
-from audyum.paths import models_dir
+from audyum.paths import hf_home, models_dir
 
 _RELEASE = "https://github.com/hkchengrex/MMAudio/releases/download/v0.1/"
 log = logging.getLogger(__name__)
+
+_MD5 = {  # dalla tabella dei download ufficiali di MMAudio
+    "large_44k_v2": "01ad4464f049b2d7efdaa4c1a59b8dfe",
+    "medium_44k": "5a56b6665e45a1e65ada534defa903d0",
+    "small_44k": "babd74c884783d13701ea2820a5f5b6d",
+}
 
 VARIANTS = {
     "large_44k_v2": "MMAudio L v2 · qualità massima",
@@ -52,33 +58,40 @@ class MMAudioEngine(Engine):
     def loaded(self) -> bool:
         return self._net is not None
 
-    def _files(self) -> list[tuple[str, HFFile | URLFile]]:
+    def _files(self) -> list[tuple[str, URLFile]]:
         root = models_dir() / "mmaudio"
+        hf = "https://huggingface.co/"
+        clip, big = hf + "apple/DFN5B-CLIP-ViT-H-14-384/resolve/main/", hf + "nvidia/bigvgan_v2_44khz_128band_512x/resolve/main/"
         return [
-            ("model", HFFile("hkchengrex/MMAudio", (f"weights/mmaudio_{self.variant}.pth",), f"MMAudio {self.variant}")),
-            ("vae", URLFile(_RELEASE + "v1-44.pth", root / "v1-44.pth", "fab020275fa44c6589820ce025191600", "autoencoder audio")),
+            ("model", URLFile(hf + f"hkchengrex/MMAudio/resolve/main/weights/mmaudio_{self.variant}.pth",
+                              root / f"mmaudio_{self.variant}.pth", f"MMAudio {self.variant}", _MD5[self.variant])),
+            ("vae", URLFile(_RELEASE + "v1-44.pth", root / "v1-44.pth", "autoencoder audio",
+                            "fab020275fa44c6589820ce025191600")),
             ("sync", URLFile(_RELEASE + "synchformer_state_dict.pth", root / "synchformer_state_dict.pth",
-                             "5b2f5594b0730f70e41e549b7c94390c", "Synchformer")),
-            # Questi due vengono caricati da open_clip e BigVGAN tramite la cache HF: li prescarichiamo
-            # solo per mostrare l'avanzamento. Stesso ordine di preferenza di open_clip.
-            ("clip_cfg", HFFile("apple/DFN5B-CLIP-ViT-H-14-384", ("open_clip_config.json",), "configurazione CLIP")),
-            ("clip", HFFile("apple/DFN5B-CLIP-ViT-H-14-384",
-                            ("open_clip_model.safetensors", "open_clip_pytorch_model.bin"), "encoder visivo CLIP")),
-            ("vocoder_cfg", HFFile("nvidia/bigvgan_v2_44khz_128band_512x", ("config.json",), "configurazione vocoder")),
-            ("vocoder", HFFile("nvidia/bigvgan_v2_44khz_128band_512x", ("bigvgan_generator.pt",), "vocoder BigVGAN")),
+                             "Synchformer", "5b2f5594b0730f70e41e549b7c94390c")),
+            ("clip_cfg", URLFile(clip + "open_clip_config.json", root / "clip" / "open_clip_config.json",
+                                 "configurazione CLIP")),
+            ("clip", URLFile(clip + "open_clip_pytorch_model.bin", root / "clip" / "open_clip_pytorch_model.bin",
+                             "encoder visivo CLIP")),
+            ("vocoder_cfg", URLFile(big + "config.json", root / "bigvgan" / "config.json",
+                                    "configurazione vocoder")),
+            ("vocoder", URLFile(big + "bigvgan_generator.pt", root / "bigvgan" / "bigvgan_generator.pt",
+                                "vocoder BigVGAN")),
         ]
 
     def ensure_weights(self, progress: ProgressFn, cancel: Optional[threading.Event] = None) -> None:
-        heal_hf_cache()  # file già scaricati con collegamenti che Windows non apre: si rendono file veri
         files = self._files()
         for i, (key, item) in enumerate(files, 1):
             step = f" ({i}/{len(files)})"
-            self._paths[key] = fetch(item, lambda msg, f: progress(msg + step, f), cancel)
-        heal_hf_cache()
+            self._paths[key] = fetch_url(item, lambda msg, f: progress(msg + step, f), cancel)
+        # La cache Hugging Face delle versioni precedenti (circa 9 GB) non serve più.
+        remove_old_hf_cache(hf_home() / "hub")
 
     def load(self, progress: ProgressFn) -> None:
         import torch
+        from mmaudio.ext.autoencoder import autoencoder as ae_mod
         from mmaudio.model.networks import get_my_mmaudio
+        from mmaudio.model.utils import features_utils as fu_mod
         from mmaudio.model.utils.features_utils import FeaturesUtils
 
         device = self._device or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -95,20 +108,32 @@ class MMAudioEngine(Engine):
         try:
             state = torch.load(self._paths["model"], map_location=device, weights_only=True)
         except OSError:
-            path = str(self._paths["model"])
-            log.error("Apertura dei pesi non riuscita: islink=%s exists=%s isfile=%s", os.path.islink(path),
-                      os.path.exists(path), os.path.isfile(path))
+            log.error("Apertura dei pesi non riuscita:\n%s", describe_path(self._paths["model"]))
             raise
         net.load_weights(state)
+
+        # MMAudio scarica CLIP e il vocoder da Hugging Face a ogni avvio; qui lo si dirotta sui file
+        # già scaricati da noi, senza passare dalla cache di Hugging Face.
+        clip_dir, big_dir = self._paths["clip"].parent, self._paths["vocoder"].parent
+        orig_clip, orig_big = fu_mod.create_model_from_pretrained, ae_mod.BigVGANv2.from_pretrained
+
+        def local_clip(_name, **kw):
+            return orig_clip(f"local-dir:{clip_dir}", **kw)
+
+        def local_big(_name, **kw):
+            return orig_big(str(big_dir), **kw)
+
         progress("Carico CLIP, Synchformer e il vocoder", None)
-        fu = FeaturesUtils(
-            tod_vae_ckpt=str(self._paths["vae"]),
-            synchformer_ckpt=str(self._paths["sync"]),
-            enable_conditions=True,
-            mode="44k",
-            bigvgan_vocoder_ckpt=None,
-            need_vae_encoder=False,
-        ).to(device, dtype).eval()
+        with mock.patch.object(fu_mod, "create_model_from_pretrained", local_clip), \
+                mock.patch.object(ae_mod.BigVGANv2, "from_pretrained", local_big):
+            fu = FeaturesUtils(
+                tod_vae_ckpt=str(self._paths["vae"]),
+                synchformer_ckpt=str(self._paths["sync"]),
+                enable_conditions=True,
+                mode="44k",
+                bigvgan_vocoder_ckpt=None,
+                need_vae_encoder=False,
+            ).to(device, dtype).eval()
         self._net, self._fu, self._dtype, self._device = net, fu, dtype, device
 
     def unload(self) -> None:

@@ -1,108 +1,38 @@
-"""Download dei pesi con avanzamento in byte, ripresa dei download interrotti e annullamento."""
+"""Download dei pesi con avanzamento in byte, ripresa dei download interrotti e annullamento.
+
+I file vengono scritti da qui come file normali nella cartella dei modelli e poi letti direttamente:
+non si passa dalla cache di Hugging Face, i cui file (collegamenti simbolici e blob scritti dal client
+xet) su alcuni PC Windows non si riescono più a riaprire (errori 22 e 448).
+"""
 
 from __future__ import annotations
 
 import dataclasses
 import hashlib
+import logging
 import os
-import shutil
+import stat
 import threading
 from pathlib import Path
 from typing import Callable, Optional
 
 from audyum.media import Cancelled
-from audyum.paths import hf_home
+
+log = logging.getLogger(__name__)
 
 ProgressFn = Callable[[str, Optional[float]], None]
-
-
-@dataclasses.dataclass(frozen=True)
-class HFFile:
-    """File su Hugging Face, scaricato nella cache standard (HF_HOME) dove lo cercano open_clip e BigVGAN."""
-
-    repo_id: str
-    filenames: tuple[str, ...]  # alternative in ordine di preferenza
-    label: str
 
 
 @dataclasses.dataclass(frozen=True)
 class URLFile:
     url: str
     dest: Path
-    md5: str
     label: str
+    md5: Optional[str] = None  # se noto, il file scaricato viene verificato; altrimenti conta la dimensione
 
 
 def _gb(n: float) -> str:
     return f"{n / 1e9:.2f} GB"
-
-
-def _tqdm_class(label: str, progress: ProgressFn, cancel: Optional[threading.Event]):
-    from tqdm.std import tqdm
-
-    class _Bar(tqdm):
-        def __init__(self, *args, **kwargs):
-            kwargs["disable"] = False
-            kwargs["file"] = open(os.devnull, "w")
-            super().__init__(*args, **kwargs)
-
-        def update(self, n=1):
-            if cancel is not None and cancel.is_set():
-                raise Cancelled()
-            ret = super().update(n)
-            if self.total:
-                progress(f"Scarico {label}: {_gb(self.n)} di {_gb(self.total)}", self.n / self.total)
-            return ret
-
-    return _Bar
-
-
-def heal_hf_cache(hub: Path | None = None) -> int:
-    """Sostituisce con file veri i collegamenti simbolici della cache Hugging Face.
-
-    Alcuni PC Windows rifiutano di aprire i collegamenti (errore 22 o 448). Il file vero è un hardlink
-    al blob già scaricato (nessun GB in più sul disco, nessun nuovo download); se l'hardlink non è
-    possibile si copia. Restituisce quanti collegamenti sono stati sostituiti.
-    """
-    hub = hub or (hf_home() / "hub")
-    fixed = 0
-    for folder, _dirs, files in os.walk(hub):
-        if os.sep + "snapshots" + os.sep not in folder + os.sep:
-            continue
-        for name in files:
-            link = os.path.join(folder, name)
-            if not os.path.islink(link):
-                continue
-            blob = os.path.normpath(os.path.join(folder, os.readlink(link)))
-            if not os.path.isfile(blob):
-                continue
-            os.unlink(link)
-            try:
-                os.link(blob, link)
-            except OSError:
-                shutil.copy2(blob, link)
-            fixed += 1
-    return fixed
-
-
-def fetch_hf(item: HFFile, progress: ProgressFn, cancel: Optional[threading.Event] = None) -> Path:
-    from huggingface_hub import hf_hub_download
-    from huggingface_hub.errors import EntryNotFoundError
-
-    for i, name in enumerate(item.filenames):
-        try:
-            try:
-                return Path(hf_hub_download(item.repo_id, name, local_files_only=True))
-            except Exception:
-                pass
-            progress(f"Scarico {item.label}", None)
-            path = Path(hf_hub_download(item.repo_id, name, tqdm_class=_tqdm_class(item.label, progress, cancel)))
-            heal_hf_cache()
-            return path
-        except EntryNotFoundError:
-            if i == len(item.filenames) - 1:
-                raise
-    raise FileNotFoundError(item.repo_id)
 
 
 def _md5(path: Path) -> str:
@@ -113,24 +43,37 @@ def _md5(path: Path) -> str:
     return h.hexdigest()
 
 
+def _stamp(item: URLFile) -> Path:
+    return item.dest.with_name(item.dest.name + ".ok")
+
+
+def _is_complete(item: URLFile) -> bool:
+    dest, stamp = item.dest, _stamp(item)
+    try:
+        return dest.is_file() and stamp.read_text().strip() == f"{item.md5 or '-'} {dest.stat().st_size}"
+    except OSError:
+        return False
+
+
 def fetch_url(item: URLFile, progress: ProgressFn, cancel: Optional[threading.Event] = None) -> Path:
+    """Scarica (o riprende) il file e lo lascia in item.dest. Un file già completo non si riscarica."""
     import requests
 
     dest = item.dest
-    stamp = dest.with_name(dest.name + ".ok")
-    if dest.exists() and stamp.exists() and stamp.read_text().strip() == f"{item.md5} {dest.stat().st_size}":
+    if _is_complete(item):
         return dest
     dest.parent.mkdir(parents=True, exist_ok=True)
-    if dest.exists() and _md5(dest) == item.md5:
-        stamp.write_text(f"{item.md5} {dest.stat().st_size}")
+    if item.md5 and dest.is_file() and _md5(dest) == item.md5:
+        _stamp(item).write_text(f"{item.md5} {dest.stat().st_size}")
         return dest
 
     part = dest.with_name(dest.name + ".part")
     done = part.stat().st_size if part.exists() else 0
     headers = {"Range": f"bytes={done}-"} if done else {}
-    with requests.get(item.url, stream=True, headers=headers, timeout=60) as r:
+    total = 0
+    with requests.get(item.url, stream=True, headers=headers, timeout=60, allow_redirects=True) as r:
         if r.status_code == 416:  # il .part è già completo
-            r.close()
+            total = done
         else:
             r.raise_for_status()
             if done and r.status_code != 206:  # il server ignora Range: si riparte da zero
@@ -144,15 +87,38 @@ def fetch_url(item: URLFile, progress: ProgressFn, cancel: Optional[threading.Ev
                     done += len(chunk)
                     if total:
                         progress(f"Scarico {item.label}: {_gb(done)} di {_gb(total)}", done / total)
-    if _md5(part) != item.md5:
+    size = part.stat().st_size
+    if total and size != total:
+        raise RuntimeError(f"Download incompleto per {item.label} ({size} byte su {total}). Riprova.")
+    if item.md5 and _md5(part) != item.md5:
         part.unlink(missing_ok=True)
         raise RuntimeError(f"Il file scaricato per {item.label} è corrotto. Riprova.")
     os.replace(part, dest)
-    stamp.write_text(f"{item.md5} {dest.stat().st_size}")
+    _stamp(item).write_text(f"{item.md5 or '-'} {dest.stat().st_size}")
     return dest
 
 
-def fetch(item: HFFile | URLFile, progress: ProgressFn, cancel: Optional[threading.Event] = None) -> Path:
-    if isinstance(item, HFFile):
-        return fetch_hf(item, progress, cancel)
-    return fetch_url(item, progress, cancel)
+def describe_path(path: Path | str) -> str:
+    """Testo diagnostico per il log: dimensione e attributi del file e di ogni cartella sopra, con i punti di
+    reparse (collegamenti, giunzioni, segnaposto cloud) che Windows può rifiutare di attraversare."""
+    lines = []
+    p = Path(path)
+    for cur in [p, *p.parents][:9]:
+        try:
+            st = os.lstat(cur)
+            attrs = getattr(st, "st_file_attributes", 0)
+            reparse = bool(attrs & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400))
+            tag = getattr(st, "st_reparse_tag", 0)
+            lines.append(f"{cur}: size={st.st_size} attrs={attrs:#x} reparse={reparse} tag={tag:#x}")
+        except OSError as e:
+            lines.append(f"{cur}: lstat non riuscito ({e})")
+    return "\n".join(lines)
+
+
+def remove_old_hf_cache(hub: Path) -> None:
+    """Toglie la cache Hugging Face delle versioni precedenti (circa 9 GB), ora inutile."""
+    import shutil
+
+    if hub.exists():
+        log.info("Rimuovo la vecchia cache Hugging Face: %s", hub)
+        shutil.rmtree(hub, ignore_errors=True)
