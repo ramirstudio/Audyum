@@ -32,7 +32,7 @@ QSS = """
 QWidget {{ background: transparent; color: {text}; font-family: "Instrument Sans"; font-size: 10.5pt; }}
 QMainWindow, QDialog, QMessageBox, QFileDialog, QMenu, QToolTip {{ background: {base}; }}
 
-QLabel#wordmark {{ font-family: "Instrument Serif"; font-size: 44pt; color: {peach}; }}
+QLabel#wordmark {{ font-family: "Instrument Serif"; font-size: 72pt; color: {peach}; }}
 QLabel#section {{ font-size: 11pt; font-weight: 700; padding-top: 18px; }}
 QLabel#muted, QLabel#footnote {{ color: {secondary}; font-size: 9.5pt; }}
 QLabel#rowLabel {{ font-size: 10.5pt; }}

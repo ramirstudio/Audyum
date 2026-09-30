@@ -16,7 +16,6 @@ configure_environment()
 from PySide6.QtCore import QObject, Qt, QThread, QUrl, Signal, Slot  # noqa: E402
 from PySide6.QtGui import QDesktopServices, QIcon  # noqa: E402
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer  # noqa: E402
-from PySide6.QtMultimediaWidgets import QVideoWidget  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
     QApplication,
     QCheckBox,
@@ -38,7 +37,6 @@ from PySide6.QtWidgets import (  # noqa: E402
     QScrollArea,
     QSlider,
     QSpinBox,
-    QStackedLayout,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -46,6 +44,7 @@ from PySide6.QtWidgets import (  # noqa: E402
 
 from audyum import engines  # noqa: E402
 from audyum.gui import theme  # noqa: E402
+from audyum.gui.video_view import VideoView  # noqa: E402
 from audyum.media import Cancelled, probe  # noqa: E402
 from audyum.pipeline import JobSettings, VariantResult, run_job  # noqa: E402
 
@@ -131,21 +130,13 @@ class MainWindow(QMainWindow):
         mark.setObjectName("wordmark")
         col.addWidget(mark)
 
-        frame = QFrame()
-        frame.setObjectName("videoFrame")
-        self.stack = QStackedLayout(frame)
-        hint = QLabel("Trascina qui un video muto")
-        hint.setObjectName("dropHint")
-        hint.setAlignment(Qt.AlignCenter)
-        self.video_widget = QVideoWidget()
-        self.stack.addWidget(hint)
-        self.stack.addWidget(self.video_widget)
-        col.addWidget(frame, 1)
+        self.video_view = VideoView(radius=18, hint="Trascina qui un video muto")
+        col.addWidget(self.video_view, 1)
 
         self.player = QMediaPlayer(self)
         self.audio_out = QAudioOutput(self)
         self.player.setAudioOutput(self.audio_out)
-        self.player.setVideoOutput(self.video_widget)
+        self.player.setVideoOutput(self.video_view.sink)
 
         self._icon_play = QIcon(str(theme.ICONS / "play.svg"))
         self._icon_pause = QIcon(str(theme.ICONS / "pause.svg"))
@@ -442,7 +433,6 @@ class MainWindow(QMainWindow):
         source = self.video if row == 0 else self.results[row - 1].video
         self.player.stop()
         self.player.setSource(QUrl.fromLocalFile(str(source)))
-        self.stack.setCurrentIndex(1)
         self._refresh_state()
 
     def _save_selected(self, video: bool) -> None:
