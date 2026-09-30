@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import logging
 import os
 import shutil
@@ -112,10 +113,10 @@ class MainWindow(QMainWindow):
         self._worker: JobWorker | None = None
         self._cancel = threading.Event()
 
-        root = QWidget()
+        root = theme.GradientRoot()
         lay = QHBoxLayout(root)
-        lay.setContentsMargins(28, 18, 20, 20)
-        lay.setSpacing(28)
+        lay.setContentsMargins(40, 24, 28, 24)
+        lay.setSpacing(56)
         lay.addLayout(self._build_player(), 3)
         lay.addWidget(self._build_panel(), 0)
         self.setCentralWidget(root)
@@ -152,7 +153,7 @@ class MainWindow(QMainWindow):
         transport.setSpacing(14)
         self.play_btn = QPushButton()
         self.play_btn.setObjectName("round")
-        self.play_btn.setFixedSize(40, 40)
+        self.play_btn.setFixedSize(44, 44)
         self.play_btn.setIcon(self._icon_play)
         self.play_btn.setToolTip("Riproduci")
         self.play_btn.clicked.connect(self._toggle_play)
@@ -186,7 +187,7 @@ class MainWindow(QMainWindow):
         box = QFrame()
         box.setObjectName("group")
         lay = QVBoxLayout(box)
-        lay.setContentsMargins(14, 12, 14, 12)
+        lay.setContentsMargins(0, 4, 0, 4)
         lay.setSpacing(10)
         return box, lay
 
@@ -333,7 +334,7 @@ class MainWindow(QMainWindow):
 
         col.addWidget(self._section("Risultati"))
         box, g = self._group()
-        g.setContentsMargins(8, 6, 8, 10)
+        g.setContentsMargins(0, 4, 0, 4)
         self.result_list = QListWidget()
         self.result_list.setMinimumHeight(150)
         self.result_list.currentRowChanged.connect(self._preview_row)
@@ -355,7 +356,7 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidget(panel)
         scroll.setWidgetResizable(True)
-        scroll.setFixedWidth(420)
+        scroll.setFixedWidth(440)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         return scroll
 
@@ -419,8 +420,10 @@ class MainWindow(QMainWindow):
         self.out_dir = path.parent / "Audyum"
         self.results = []
         note = " · contiene già una traccia audio, verrà sostituita" if info.has_audio else ""
-        self.file_lbl.setText(f"{path.name}\n{info.width}×{info.height} · {info.fps:.2f} fps · "
-                              f"{info.duration:.1f} s{note}")
+        self.file_lbl.setText(
+            f"<span style='color:{theme.C['peach']}; font-weight:700'>{html.escape(path.name)}</span><br>"
+            f"<span style='color:{theme.C['secondary']}'>{info.width}×{info.height} · {info.fps:.2f} fps · "
+            f"{info.duration:.1f} s{note}</span>")
         self.out_lbl.setText(f"Salva in {self.out_dir}")
         self.result_list.clear()
         QListWidgetItem("Originale", self.result_list)
