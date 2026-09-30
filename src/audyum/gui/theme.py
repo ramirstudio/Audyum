@@ -178,16 +178,27 @@ class Backdrop:
         self.reference = QPixmap(str(_HERE / "background.png"))
         self.image: QPixmap | None = None
         self.ui = ui
+        self._cache: QPixmap | None = None
         self.set(ui)
 
     def set(self, ui: UISettings) -> None:
         if ui.bg_mode == "image" and (self.image is None or ui.bg_image != self.ui.bg_image or self.image.isNull()):
             self.image = QPixmap(ui.bg_image)
         self.ui = ui
+        self._cache = None
 
-    def paint(self, widget: QWidget) -> None:
+    def paint(self, widget: QWidget, region: QRect | None = None) -> None:
+        # Lo sfondo scalato si calcola una volta per dimensione della finestra; a ogni ridisegno
+        # (per esempio a ogni fotogramma del video) si copia solo la parte da aggiornare.
+        size = widget.size()
+        if getattr(self, "_cache", None) is None or self._cache.size() != size:
+            self._cache = QPixmap(size)
+            cp = QPainter(self._cache)
+            paint_backdrop(cp, self._cache.rect(), self.ui, self.reference, self.image)
+            cp.end()
         p = QPainter(widget)
-        paint_backdrop(p, widget.rect(), self.ui, self.reference, self.image)
+        r = region or widget.rect()
+        p.drawPixmap(r, self._cache, r)
         p.end()
 
 
@@ -200,7 +211,7 @@ class GradientRoot(QWidget):
         self.backdrop = backdrop
 
     def paintEvent(self, event) -> None:
-        self.backdrop.paint(self)
+        self.backdrop.paint(self, event.rect())
 
 
 def apply(app: QApplication, ui: UISettings) -> None:

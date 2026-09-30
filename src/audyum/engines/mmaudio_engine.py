@@ -54,6 +54,7 @@ class MMAudioEngine(Engine):
         self._net = None
         self._fu = None
         self._dtype = None
+        self._decode_dtype = None
 
     @property
     def loaded(self) -> bool:
@@ -96,13 +97,13 @@ class MMAudioEngine(Engine):
         from mmaudio.model.utils.features_utils import FeaturesUtils
 
         device = self._device or ("cuda" if torch.cuda.is_available() else "cpu")
-        # Precisione piena (float32): il decoder audio e il vocoder generano la forma d'onda e in bfloat16
-        # (8 bit di mantissa) l'audio esce sporco e metallico. La modalità veloce usa bfloat16 (RTX 30xx in su).
-        fast_ok = device == "cuda" and torch.cuda.get_device_capability()[0] >= 8
-        dtype = torch.bfloat16 if (not self.full_precision and fast_ok) else torch.float32
+        # Transformer, CLIP e Synchformer in bfloat16 (RTX 30xx in su): metà VRAM, qualità invariata.
+        # Il decoder audio e il vocoder disegnano la forma d'onda: con la precisione piena restano in
+        # float32, che costa poca memoria (circa 0,5 GB) ed evita l'audio sporco.
+        dtype = torch.bfloat16 if device == "cuda" and torch.cuda.get_device_capability()[0] >= 8 else torch.float32
         if device == "cuda":
-            torch.backends.cuda.matmul.allow_tf32 = True  # matmul del transformer: TF32 è più che sufficiente
-            torch.backends.cudnn.allow_tf32 = not self.full_precision  # convoluzioni del vocoder: float32 vero
+            torch.backends.cuda.matmul.allow_tf32 = True
+            torch.backends.cudnn.allow_tf32 = not self.full_precision
 
         progress("Carico MMAudio in memoria", None)
         net = get_my_mmaudio(self.variant).to(device, dtype).eval()
@@ -135,6 +136,11 @@ class MMAudioEngine(Engine):
                 bigvgan_vocoder_ckpt=None,
                 need_vae_encoder=False,
             ).to(device, dtype).eval()
+        if self.full_precision:
+            fu.tod.float()
+        self._decode_dtype = torch.float32 if self.full_precision else dtype
+        if device == "cuda":
+            torch.cuda.empty_cache()
         self._net, self._fu, self._dtype, self._device = net, fu, dtype, device
 
     def unload(self) -> None:
@@ -196,6 +202,8 @@ class MMAudioEngine(Engine):
                     return net.ode_wrapper(t, x, conditions, empty, params.guidance)
 
                 x1 = net.unnormalize(fm.to_data(ode, x0))
-                audio = fu.vocode(fu.decode(x1)).float().cpu().numpy()[0]
+                audio = fu.vocode(fu.decode(x1.to(self._decode_dtype))).float().cpu().numpy()[0]
                 outputs.append(audio[None] if audio.ndim == 1 else audio)
+        if device == "cuda":
+            torch.cuda.empty_cache()  # restituisce la VRAM temporanea: serve anche al lettore video
         return outputs

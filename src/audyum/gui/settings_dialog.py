@@ -8,7 +8,7 @@ from __future__ import annotations
 import dataclasses
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (
     QCheckBox,
     QColorDialog,
@@ -179,7 +179,10 @@ class SettingsDialog(QDialog):
         return box
 
     def paintEvent(self, event) -> None:
-        self.backdrop.paint(self)
+        # Il dialogo ha dimensioni diverse dalla finestra principale: sfondo disegnato direttamente.
+        p = QPainter(self)
+        theme.paint_backdrop(p, self.rect(), self.backdrop.ui, self.backdrop.reference, self.backdrop.image)
+        p.end()
 
     # ---- logica --------------------------------------------------------------------------
 

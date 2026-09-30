@@ -20,18 +20,23 @@ class VideoView(QWidget):
         self.sink = QVideoSink(self)
         self.sink.videoFrameChanged.connect(self._on_frame)
         self._image: QImage | None = None
+        self._frame: QVideoFrame | None = None  # ultimo fotogramma arrivato, convertito solo quando si disegna
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setMinimumSize(320, 200)
 
     def _on_frame(self, frame: QVideoFrame) -> None:
-        img = frame.toImage()
-        if not img.isNull():
-            self._image = img
+        # Qt accorpa gli update(): se arrivano più fotogrammi prima di un ridisegno se ne converte uno solo.
+        if frame.isValid():
+            self._frame = frame
             self.update()
 
     def set_image(self, image: QImage | None) -> None:
+        self._frame = None
         self._image = image
         self.update()
+
+    def clear(self) -> None:
+        self.set_image(None)
 
     def _target(self) -> QRectF:
         r = QRectF(self.rect()).adjusted(1, 1, -1, -1)
@@ -43,6 +48,14 @@ class VideoView(QWidget):
         return QRectF(r.x() + (r.width() - w) / 2, r.y() + (r.height() - h) / 2, w, h)
 
     def paintEvent(self, event) -> None:
+        if self._frame is not None:
+            try:
+                img = self._frame.toImage()
+                if not img.isNull():
+                    self._image = img
+            except Exception:  # noqa: BLE001 - un fotogramma illeggibile non deve chiudere l'app
+                pass
+            self._frame = None
         p = QPainter(self)
         p.setRenderHints(QPainter.Antialiasing | QPainter.SmoothPixmapTransform)
         target = self._target()

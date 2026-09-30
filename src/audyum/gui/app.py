@@ -517,6 +517,7 @@ class MainWindow(QMainWindow):
         )
         self.player.stop()
         self.player.setSource(QUrl())  # libera il file se si rigenera nella stessa cartella
+        self.video_view.clear()
         self._cancel = threading.Event()
         self._thread = QThread(self)
         self._worker = JobWorker(self.video, self._engine(), settings, self.out_dir, self._cancel)

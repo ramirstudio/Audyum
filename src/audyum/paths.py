@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import faulthandler
 import logging
 import os
 import sys
 from pathlib import Path
+
+
+_crash_log = None
 
 
 def install_root() -> Path:
@@ -49,8 +53,16 @@ def configure_environment() -> None:
     os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
     os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 
+    # Il lettore video decodifica sulla CPU: la GPU resta al modello e, a VRAM quasi piena, il
+    # decoder hardware di Windows si blocca o fa chiudere l'app. "none" non è un tipo valido: nessun decoder GPU.
+    os.environ.setdefault("QT_FFMPEG_DECODING_HW_DEVICE_TYPES", "none")
+
     logs_dir().mkdir(parents=True, exist_ok=True)
     log_file = logs_dir() / "audyum.log"
+    # Un crash nativo (Qt, driver, CUDA) finisce nel log con lo stack di ogni thread.
+    global _crash_log
+    _crash_log = open(logs_dir() / "crash.log", "a", encoding="utf-8", buffering=1)
+    faulthandler.enable(_crash_log, all_threads=True)
     if sys.stdout is None or sys.stderr is None:
         stream = open(log_file, "a", encoding="utf-8", buffering=1)
         sys.stdout = sys.stdout or stream
