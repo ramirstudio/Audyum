@@ -3,32 +3,50 @@ pulsante principale sfumato. Titolo in Instrument Serif, testo in Instrument San
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
-from PySide6.QtGui import QFont, QFontDatabase, QPainter, QPixmap
+from PySide6.QtCore import QPointF, QRect, QRectF
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QLinearGradient, QPainter, QPixmap, QRadialGradient
 from PySide6.QtWidgets import QApplication, QWidget
+
+from audyum.ui_settings import UISettings, hex_to_rgb, lighten, mix
 
 _HERE = Path(__file__).parent
 _FONTS = _HERE / "fonts"
 ICONS = _HERE / "icons"
 
-C = {
-    "base": "#0B0612",
-    "text": "#F4EEF6",
-    "secondary": "#B8ADC4",
-    "tertiary": "#6E6377",
-    "line": "rgba(255, 255, 255, 46)",
-    "line_hover": "rgba(255, 255, 255, 110)",
-    "fill": "rgba(255, 255, 255, 14)",
-    "fill_hover": "rgba(255, 255, 255, 26)",
-    "peach": "#F2A68C",
-    "coral": "#EE8A6C",
-    "rose": "#D9577A",
-    "popup": "#2A2036",
-    "icons": ICONS.as_posix(),
-}
+C: dict[str, str] = {}
 
-QSS = """
+
+def luminance(c: str) -> float:
+    r, g, b = (v / 255 for v in hex_to_rgb(c))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def palette(ui: UISettings) -> dict[str, str]:
+    base = ui.base()
+    return {
+        "base": base,
+        "text": "#F4EEF6",
+        "secondary": "#B8ADC4",
+        "tertiary": "#6E6377",
+        "line": "rgba(255, 255, 255, 46)",
+        "line_hover": "rgba(255, 255, 255, 110)",
+        "fill": "rgba(255, 255, 255, 14)",
+        "fill_hover": "rgba(255, 255, 255, 26)",
+        "peach": lighten(ui.accent1, 0.25),
+        "coral": ui.accent1,
+        "rose": ui.accent_end(),
+        "coral_hover": lighten(ui.accent1, 0.12),
+        "rose_hover": lighten(ui.accent_end(), 0.12),
+        "on_accent": "#FFFFFF" if luminance(mix(ui.accent1, ui.accent_end(), 0.5)) < 0.62 else "#1A1512",
+        "popup": mix(base, "#FFFFFF", 0.10),
+        "icons": ICONS.as_posix(),
+    }
+
+
+QSS_TEMPLATE = """
 QWidget {{ background: transparent; color: {text}; font-family: "Instrument Sans"; font-size: 10.5pt; }}
 QMainWindow, QDialog, QMessageBox, QFileDialog, QMenu, QToolTip {{ background: {base}; }}
 
@@ -68,11 +86,11 @@ QPushButton {{
 QPushButton:hover {{ border-color: {line_hover}; background: {fill}; }}
 QPushButton:disabled {{ color: {tertiary}; border-color: rgba(255, 255, 255, 20); }}
 QPushButton#primary {{
-    border: none; border-radius: 22px; padding: 13px 18px; font-weight: 700; font-size: 11pt; color: #FFFFFF;
+    border: none; border-radius: 22px; padding: 13px 18px; font-weight: 700; font-size: 11pt; color: {on_accent};
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {coral}, stop:1 {rose});
 }}
 QPushButton#primary:hover {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #F39A7E, stop:1 #E0668A);
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {coral_hover}, stop:1 {rose_hover});
 }}
 QPushButton#primary:disabled {{ background: {fill}; color: {tertiary}; }}
 QPushButton#plain {{ border: none; color: {secondary}; padding: 8px 4px; }}
@@ -110,26 +128,89 @@ QScrollBar:vertical {{ background: transparent; width: 8px; }}
 QScrollBar::handle:vertical {{ background: rgba(255, 255, 255, 40); border-radius: 4px; min-height: 30px; }}
 QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
 QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
-""".format(**C)
+""" + """
+QLabel#dlgTitle {{ font-family: "Instrument Serif"; font-size: 30pt; }}
+"""
 
 
-class GradientRoot(QWidget):
-    """Fondo della finestra: la sfumatura del riferimento (background.png), stirata sulla finestra."""
+def make_qss(ui: UISettings) -> str:
+    return QSS_TEMPLATE.format(**palette(ui))
 
-    def __init__(self):
-        super().__init__()
-        self.setObjectName("root")
-        self._bg = QPixmap(str(_HERE / "background.png"))
 
-    def paintEvent(self, event) -> None:
-        p = QPainter(self)
-        p.setRenderHint(QPainter.SmoothPixmapTransform)
-        p.drawPixmap(self.rect(), self._bg)
+def paint_backdrop(p: QPainter, rect: QRect, ui: UISettings, reference: QPixmap, image: QPixmap | None) -> None:
+    """Disegna lo sfondo scelto: tema (immagine di riferimento), sfumatura, tinta unita o immagine."""
+    w, h = rect.width(), rect.height()
+    p.setRenderHint(QPainter.SmoothPixmapTransform)
+    if ui.bg_mode == "reference":
+        p.drawPixmap(rect, reference)
+    elif ui.bg_mode == "solid":
+        p.fillRect(rect, QColor(ui.bg_solid))
+    elif ui.bg_mode == "image" and image is not None and not image.isNull():
+        scale = max(w / image.width(), h / image.height())
+        iw, ih = image.width() * scale, image.height() * scale
+        p.drawPixmap(QRectF(rect.x() + (w - iw) / 2, rect.y() + (h - ih) / 2, iw, ih), image, QRectF(image.rect()))
+        p.fillRect(rect, QColor(0, 0, 0, 120))
+    else:
+        a = math.radians(ui.bg_angle)
+        dx, dy = math.sin(a), math.cos(a)
+        half = (abs(w * dx) + abs(h * dy)) / 2
+        cx, cy = rect.x() + w / 2, rect.y() + h / 2
+        grad = QLinearGradient(cx - dx * half, cy - dy * half, cx + dx * half, cy + dy * half)
+        grad.setColorAt(0.0, QColor(ui.bg1))
+        grad.setColorAt(1.0, QColor(ui.bg2))
+        p.fillRect(rect, grad)
+    if ui.glow and ui.bg_mode in ("gradient", "image"):
+        c = QColor(ui.glow_color)
+        radial = QRadialGradient(QPointF(rect.x() - w * 0.02, rect.y() + h * 1.05), w * 0.42)
+        c.setAlpha(150)
+        radial.setColorAt(0.0, c)
+        c.setAlpha(55)
+        radial.setColorAt(0.45, c)
+        c.setAlpha(0)
+        radial.setColorAt(1.0, c)
+        p.fillRect(rect, radial)
+
+
+class Backdrop:
+    """Carica le immagini di sfondo una volta sola e le disegna su qualunque widget."""
+
+    def __init__(self, ui: UISettings):
+        self.reference = QPixmap(str(_HERE / "background.png"))
+        self.image: QPixmap | None = None
+        self.ui = ui
+        self.set(ui)
+
+    def set(self, ui: UISettings) -> None:
+        if ui.bg_mode == "image" and (self.image is None or ui.bg_image != self.ui.bg_image or self.image.isNull()):
+            self.image = QPixmap(ui.bg_image)
+        self.ui = ui
+
+    def paint(self, widget: QWidget) -> None:
+        p = QPainter(widget)
+        paint_backdrop(p, widget.rect(), self.ui, self.reference, self.image)
         p.end()
 
 
-def apply(app: QApplication) -> None:
+class GradientRoot(QWidget):
+    """Fondo della finestra principale."""
+
+    def __init__(self, backdrop: Backdrop):
+        super().__init__()
+        self.setObjectName("root")
+        self.backdrop = backdrop
+
+    def paintEvent(self, event) -> None:
+        self.backdrop.paint(self)
+
+
+def apply(app: QApplication, ui: UISettings) -> None:
     for f in _FONTS.glob("*.ttf"):
         QFontDatabase.addApplicationFont(str(f))
     app.setFont(QFont("Instrument Sans", 10))
-    app.setStyleSheet(QSS)
+    restyle(app, ui)
+
+
+def restyle(app: QApplication, ui: UISettings) -> None:
+    C.clear()
+    C.update(palette(ui))
+    app.setStyleSheet(make_qss(ui))

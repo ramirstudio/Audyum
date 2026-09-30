@@ -43,7 +43,9 @@ from PySide6.QtWidgets import (  # noqa: E402
 )
 
 from audyum import engines  # noqa: E402
+from audyum import ui_settings  # noqa: E402
 from audyum.gui import theme  # noqa: E402
+from audyum.gui.settings_dialog import SettingsDialog  # noqa: E402
 from audyum.gui.video_view import VideoView  # noqa: E402
 from audyum.media import Cancelled, probe  # noqa: E402
 from audyum.pipeline import JobSettings, VariantResult, run_job  # noqa: E402
@@ -99,11 +101,13 @@ class JobWorker(QObject):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, ui: ui_settings.UISettings | None = None):
+        ui = ui or ui_settings.UISettings()
         super().__init__()
         self.setWindowTitle("Audyum")
         self.setMinimumSize(1080, 660)
         self.setAcceptDrops(True)
+        self._file_info = None
         self.video: Path | None = None
         self.out_dir: Path | None = None
         self.results: list[VariantResult] = []
@@ -112,7 +116,9 @@ class MainWindow(QMainWindow):
         self._worker: JobWorker | None = None
         self._cancel = threading.Event()
 
-        root = theme.GradientRoot()
+        self.ui = ui
+        self.backdrop = theme.Backdrop(ui)
+        root = theme.GradientRoot(self.backdrop)
         lay = QHBoxLayout(root)
         lay.setContentsMargins(40, 24, 28, 24)
         lay.setSpacing(56)
@@ -126,9 +132,14 @@ class MainWindow(QMainWindow):
     def _build_player(self) -> QVBoxLayout:
         col = QVBoxLayout()
         col.setSpacing(14)
+        head = QHBoxLayout()
         mark = QLabel("Audyum")
         mark.setObjectName("wordmark")
-        col.addWidget(mark)
+        self.settings_btn = QPushButton("Impostazioni")
+        self.settings_btn.clicked.connect(self._open_settings)
+        head.addWidget(mark, 1)
+        head.addWidget(self.settings_btn, 0, Qt.AlignTop)
+        col.addLayout(head)
 
         self.video_view = VideoView(radius=18, hint="Trascina qui un video muto")
         col.addWidget(self.video_view, 1)
@@ -393,6 +404,27 @@ class MainWindow(QMainWindow):
     def dropEvent(self, event) -> None:
         self._set_video(Path(event.mimeData().urls()[0].toLocalFile()))
 
+    def _render_file_label(self) -> None:
+        if not getattr(self, "_file_info", None):
+            return
+        name, detail = self._file_info
+        self.file_lbl.setText(
+            f"<span style='color:{theme.C['peach']}; font-weight:700'>{html.escape(name)}</span><br>"
+            f"<span style='color:{theme.C['secondary']}'>{html.escape(detail)}</span>")
+
+    def _open_settings(self) -> None:
+        dlg = SettingsDialog(self.ui, self.backdrop, self)
+        dlg.changed.connect(self._apply_ui)
+        dlg.exec()
+
+    def _apply_ui(self, ui: ui_settings.UISettings) -> None:
+        self.ui = ui
+        self.backdrop.set(ui)
+        theme.restyle(QApplication.instance(), ui)
+        self._render_file_label()
+        self.centralWidget().update()
+        ui_settings.save(ui)
+
     def _choose_video(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "Apri video", str(self.video.parent if self.video else ""),
                                               VIDEO_FILTER)
@@ -411,10 +443,8 @@ class MainWindow(QMainWindow):
         self.out_dir = path.parent / "Audyum"
         self.results = []
         note = " · contiene già una traccia audio, verrà sostituita" if info.has_audio else ""
-        self.file_lbl.setText(
-            f"<span style='color:{theme.C['peach']}; font-weight:700'>{html.escape(path.name)}</span><br>"
-            f"<span style='color:{theme.C['secondary']}'>{info.width}×{info.height} · {info.fps:.2f} fps · "
-            f"{info.duration:.1f} s{note}</span>")
+        self._file_info = (path.name, f"{info.width}×{info.height} · {info.fps:.2f} fps · {info.duration:.1f} s{note}")
+        self._render_file_label()
         self.out_lbl.setText(f"Salva in {self.out_dir}")
         self.result_list.clear()
         QListWidgetItem("Originale", self.result_list)
@@ -551,8 +581,9 @@ def main() -> None:
     app = QApplication(sys.argv)
     app.setApplicationName("Audyum")
     app.setWindowIcon(QIcon(str(Path(__file__).parent / "icon.png")))
-    theme.apply(app)
-    win = MainWindow()
+    ui = ui_settings.load()
+    theme.apply(app, ui)
+    win = MainWindow(ui)
     win.show()
     if len(sys.argv) > 1 and Path(sys.argv[1]).exists():
         win._set_video(Path(sys.argv[1]))
