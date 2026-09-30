@@ -5,8 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QPointF, Qt
-from PySide6.QtGui import QColor, QFont, QFontDatabase, QLinearGradient, QPainter, QRadialGradient
+from PySide6.QtGui import QFont, QFontDatabase, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication, QWidget
 
 _HERE = Path(__file__).parent
@@ -14,7 +13,7 @@ _FONTS = _HERE / "fonts"
 ICONS = _HERE / "icons"
 
 C = {
-    "base": "#140E1C",
+    "base": "#0B0612",
     "text": "#F4EEF6",
     "secondary": "#B8ADC4",
     "tertiary": "#6E6377",
@@ -115,32 +114,17 @@ QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
 
 
 class GradientRoot(QWidget):
-    """Fondo della finestra: sfumatura verticale scura, alone freddo in alto e bagliore caldo in basso a sinistra."""
+    """Fondo della finestra: la sfumatura del riferimento (background.png), stirata sulla finestra."""
 
     def __init__(self):
         super().__init__()
         self.setObjectName("root")
-        self.setAttribute(Qt.WA_StyledBackground, False)
+        self._bg = QPixmap(str(_HERE / "background.png"))
 
     def paintEvent(self, event) -> None:
         p = QPainter(self)
-        r = self.rect()
-        base = QLinearGradient(0, 0, 0, r.height())
-        base.setColorAt(0.0, QColor("#2A1838"))
-        base.setColorAt(0.55, QColor("#170F22"))
-        base.setColorAt(1.0, QColor("#0E0A14"))
-        p.fillRect(r, base)
-
-        top = QRadialGradient(QPointF(r.width() * 0.45, -r.height() * 0.1), r.width() * 0.6)
-        top.setColorAt(0.0, QColor(110, 60, 150, 90))
-        top.setColorAt(1.0, QColor(110, 60, 150, 0))
-        p.fillRect(r, top)
-
-        glow = QRadialGradient(QPointF(-r.width() * 0.02, r.height() * 1.05), r.width() * 0.42)
-        glow.setColorAt(0.0, QColor(214, 110, 90, 150))
-        glow.setColorAt(0.45, QColor(150, 60, 80, 60))
-        glow.setColorAt(1.0, QColor(150, 60, 80, 0))
-        p.fillRect(r, glow)
+        p.setRenderHint(QPainter.SmoothPixmapTransform)
+        p.drawPixmap(self.rect(), self._bg)
         p.end()
 
 
