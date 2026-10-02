@@ -1,0 +1,15 @@
+﻿Licenza d'uso di Audyum
+
+Copyright (c) 2026 ramirstudio. Tutti i diritti riservati.
+
+1. Concessione. Con l'acquisto o lo scaricamento regolare di Audyum ricevi una licenza personale, non esclusiva e non trasferibile per installare e usare il programma sui computer di cui sei proprietario o che usi in prima persona.
+
+2. Cosa non puoi fare. Non puoi rivendere, ridistribuire, noleggiare o sublicenziare il programma o il suo codice, né pubblicarne copie, in tutto o in parte, senza permesso scritto dell'autore.
+
+3. Componenti di terze parti. Audyum usa e scarica componenti di terzi, tra cui i modelli di intelligenza artificiale, che restano sotto le loro licenze e non sono coperti da questa. L'elenco è nel file THIRD_PARTY_NOTICES.md. In particolare i pesi del modello MMAudio sono rilasciati con licenza CC BY-NC 4.0, che ne vieta l'uso commerciale: l'audio generato con quei pesi non può essere usato per scopi commerciali. Sei tu responsabile del rispetto di quelle licenze.
+
+4. Nessuna garanzia. Il programma è fornito "così com'è", senza garanzie di alcun tipo, comprese quelle di commerciabilità e di idoneità a uno scopo particolare. I risultati dell'intelligenza artificiale possono essere imprecisi.
+
+5. Responsabilità. Nei limiti consentiti dalla legge, l'autore non risponde di danni diretti o indiretti derivanti dall'uso del programma.
+
+Questo testo è un modello e non sostituisce una consulenza legale.

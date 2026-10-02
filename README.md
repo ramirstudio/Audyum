@@ -54,4 +54,4 @@ uv pip install "av>=14.0.1" "numpy<2.1" requests pytest
 
 Per compilare l'installer a mano su Windows: `uv lock`, copia `uv.exe` (versione 0.7.22) in `installer\bin\` e lancia `ISCC.exe installer\audyum.iss` con Inno Setup 6. Il workflow `.github/workflows/installer.yml` fa gli stessi passaggi: prima esegue i test, poi verifica su Windows che l'ambiente si installi e che i moduli si importino, infine compila l'installer e lo pubblica come artefatto. Se il workflow parte da un tag `v*`, allega l'installer anche alla Release.
 
-Licenze dei componenti in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Il programma è distribuito con la licenza in [LICENSE.txt](LICENSE.txt). Licenze dei componenti di terze parti in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

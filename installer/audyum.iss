@@ -19,6 +19,7 @@ PrivilegesRequired=lowest
 OutputDir=..\dist
 OutputBaseFilename=Audyum-Setup-{#AppVersion}
 SetupIconFile=audyum.ico
+LicenseFile=..\LICENSE.txt
 UninstallDisplayIcon={app}\audyum.ico
 Compression=lzma2/max
 SolidCompression=yes
@@ -38,6 +39,7 @@ Source: "..\pyproject.toml"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\uv.lock"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\THIRD_PARTY_NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\src\*"; DestDir: "{app}\src"; Excludes: "__pycache__,*.pyc"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "bin\uv.exe"; DestDir: "{app}\bin"; Flags: ignoreversion
 Source: "setup_env.cmd"; DestDir: "{app}"; Flags: ignoreversion
