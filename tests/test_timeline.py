@@ -11,7 +11,7 @@ def test_windows_cover_video_with_overlap(duration):
     assert w[-1][0] + w[-1][1] == pytest.approx(duration)
     for s, d in w:
         assert s == int(s) and 0 < d <= 8
-    for (s1, d1), (s2, _) in zip(w, w[1:]):
+    for (s1, d1), (s2, _) in zip(w, w[1:], strict=False):
         assert s2 > s1 and s1 + d1 - s2 >= 1
 
 

@@ -42,33 +42,42 @@ def logs_dir() -> Path:
 def configure_environment() -> None:
     """Da chiamare per prima cosa in ogni entry point.
 
-    huggingface_hub legge HF_HOME solo al momento dell'import, quindi va impostata prima.
     Con pythonw.exe stdout e stderr sono None: tqdm e alcuni print delle librerie
     andrebbero in errore, perciò li mandiamo su un file di log.
     """
     os.environ.setdefault("HF_HOME", str(hf_home()))
-    # Su alcuni PC Windows i collegamenti simbolici non si possono aprire (errore 22/448): file veri.
-    os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS", "1")
-    os.environ.setdefault("HF_HUB_DISABLE_XET", "1")  # download classico: file scritti in modo normale
     os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
-    os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 
-    # Il lettore video decodifica sulla CPU: la GPU resta al modello e, a VRAM quasi piena, il
-    # decoder hardware di Windows si blocca o fa chiudere l'app. "none" non è un tipo valido: nessun decoder GPU.
+    # Il lettore video decodifica sulla CPU: la GPU resta al modello e, a VRAM quasi piena, il decoder
+    # hardware di Windows può bloccarsi. Qt ignora (con un avviso nel log) il valore "none" e usa una lista vuota.
     os.environ.setdefault("QT_FFMPEG_DECODING_HW_DEVICE_TYPES", "none")
 
     logs_dir().mkdir(parents=True, exist_ok=True)
     log_file = logs_dir() / "audyum.log"
-    # Un crash nativo (Qt, driver, CUDA) finisce nel log con lo stack di ogni thread.
+    _rotate(log_file)
+    handlers: list[logging.Handler] = [logging.FileHandler(log_file, encoding="utf-8")]
+    if sys.stderr is not None:  # con pythonw non c'è la console: basta il file
+        handlers.append(logging.StreamHandler(sys.stderr))
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+                        handlers=handlers, force=True)
+    for noisy in ("httpx", "httpcore", "urllib3", "PIL", "matplotlib"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
     global _crash_log
-    _crash_log = open(logs_dir() / "crash.log", "a", encoding="utf-8", buffering=1)
-    faulthandler.enable(_crash_log, all_threads=True)
-    if sys.stdout is None or sys.stderr is None:
-        stream = open(log_file, "a", encoding="utf-8", buffering=1)
-        sys.stdout = sys.stdout or stream
-        sys.stderr = sys.stderr or stream
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        handlers=[logging.FileHandler(log_file, encoding="utf-8"), logging.StreamHandler(sys.stderr)],
-    )
+    _crash_log = open(logs_dir() / "crash.log", "a", encoding="utf-8", buffering=1)  # noqa: SIM115 - resta aperto
+    faulthandler.enable(_crash_log, all_threads=True)  # un crash nativo finisce qui con lo stack dei thread
+    if sys.stdout is None:
+        sys.stdout = _crash_log
+    if sys.stderr is None:
+        sys.stderr = _crash_log
+
+
+def _rotate(path: Path, keep_bytes: int = 2_000_000) -> None:
+    """Il log non cresce senza limite: oltre 2 MB si tiene l'ultima copia precedente."""
+    try:
+        if path.exists() and path.stat().st_size > keep_bytes:
+            old = path.with_suffix(".old.log")
+            old.unlink(missing_ok=True)
+            path.replace(old)
+    except OSError:
+        pass

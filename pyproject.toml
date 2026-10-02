@@ -1,6 +1,6 @@
 [project]
 name = "audyum"
-version = "0.1.0"
+version = "1.0.0"
 description = "Genera con l'IA, in locale, l'audio di un video muto"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"

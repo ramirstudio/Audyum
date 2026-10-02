@@ -45,17 +45,17 @@ def stitch(segments: list[tuple[float, np.ndarray]], sample_rate: int, total: fl
         s0 = int(round(start_s * sample_rate))
         if s0 >= n_total:
             break
-        audio = audio[:, : n_total - s0].astype(np.float32, copy=True)
-        n = audio.shape[1]
+        seg = audio[:, : n_total - s0].astype(np.float32, copy=True)
+        n = seg.shape[1]
         ov = min(max(0, written - s0), n)
         if ov > 0:
-            prev, new = out[:, s0 : s0 + ov], audio[:, :ov]
+            prev, new = out[:, s0 : s0 + ov], seg[:, :ov]
             rp, rn = _rms(prev), _rms(new)
             if rp > 1e-4 and rn > 1e-4:
-                audio *= np.clip(rp / rn, 0.5, 2.0)
+                seg *= np.clip(rp / rn, 0.5, 2.0)
             theta = np.linspace(0.0, np.pi / 2, ov, dtype=np.float32)
-            out[:, s0 : s0 + ov] = prev * np.cos(theta) + audio[:, :ov] * np.sin(theta)
-        out[:, s0 + ov : s0 + n] = audio[:, ov:]
+            out[:, s0 : s0 + ov] = prev * np.cos(theta) + seg[:, :ov] * np.sin(theta)
+        out[:, s0 + ov : s0 + n] = seg[:, ov:]
         written = max(written, s0 + n)
     return out
 

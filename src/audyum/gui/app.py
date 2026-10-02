@@ -22,7 +22,6 @@ from PySide6.QtWidgets import (  # noqa: E402
     QComboBox,
     QDoubleSpinBox,
     QFileDialog,
-    QFormLayout,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -47,6 +46,7 @@ from audyum import ui_settings  # noqa: E402
 from audyum.gui import theme  # noqa: E402
 from audyum.gui.settings_dialog import SettingsDialog  # noqa: E402
 from audyum.gui.video_view import VideoView  # noqa: E402
+from audyum.downloads import NotEnoughSpace  # noqa: E402
 from audyum.media import Cancelled, probe  # noqa: E402
 from audyum.pipeline import JobSettings, VariantResult, run_job  # noqa: E402
 
@@ -57,6 +57,8 @@ VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v", ".mts", ".m2t
 
 
 def _friendly_error(e: BaseException) -> str:
+    if isinstance(e, NotEnoughSpace):
+        return str(e)
     text = f"{type(e).__name__}: {e}"
     if "out of memory" in text.lower():
         return ("La memoria della GPU non basta. Scegli il modello bilanciato o veloce, "
@@ -447,6 +449,8 @@ class MainWindow(QMainWindow):
         self.out_dir = path.parent / "Audyum"
         self.results = []
         note = " · contiene già una traccia audio, verrà sostituita" if info.has_audio else ""
+        if info.duration > 15 * 60:
+            note += " · molto lungo: servono parecchia RAM e tempo, meglio dividerlo"
         self._file_info = (path.name, f"{info.width}×{info.height} · {info.fps:.2f} fps · {info.duration:.1f} s{note}")
         self._render_file_label()
         self.out_lbl.setText(f"Salva in {self.out_dir}")
@@ -475,7 +479,7 @@ class MainWindow(QMainWindow):
             return
         src = self.results[row - 1].video if video else self.results[row - 1].wav
         filt = f"*{src.suffix}"
-        dest, _ = QFileDialog.getSaveFileName(self, "Salva", str(Path.home() / src.name), filt)
+        dest, _ = QFileDialog.getSaveFileName(self, "Salva", str(src), filt)
         if dest:
             shutil.copy2(src, dest)
 
@@ -560,11 +564,13 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def _on_failed(self, msg: str) -> None:
         self.status.setText("Generazione non riuscita")
+        self._preview_row(self.result_list.currentRow())  # l'anteprima era stata liberata all'avvio
         QMessageBox.critical(self, "Errore", msg)
 
     @Slot()
     def _on_cancelled(self) -> None:
         self.status.setText("Annullato")
+        self._preview_row(self.result_list.currentRow())
 
     @Slot()
     def _on_thread_finished(self) -> None:
@@ -578,12 +584,37 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event) -> None:
         if self._busy():
             self._cancel.set()
-            self._thread.wait(15000)
+            if not self._thread.wait(8000):
+                # Il lavoro non si ferma (per esempio sta caricando i pesi): chiudere con un thread
+                # attivo manderebbe in crash Qt, quindi si esce direttamente dopo aver salvato il log.
+                log.warning("Chiusura durante una generazione: uscita forzata")
+                logging.shutdown()
+                os._exit(0)
         super().closeEvent(event)
+
+
+def _install_excepthooks() -> None:
+    """Un errore imprevisto in uno slot va nel log e in una finestra, non chiude l'app in silenzio."""
+    shown = {"busy": False}
+
+    def hook(exc_type, exc, tb) -> None:
+        log.error("Errore non gestito", exc_info=(exc_type, exc, tb))
+        if shown["busy"] or issubclass(exc_type, KeyboardInterrupt):
+            return
+        shown["busy"] = True
+        try:
+            QMessageBox.critical(None, "Errore imprevisto",
+                                 f"{exc_type.__name__}: {exc}\n\nDettagli nel log: {logs_dir() / 'audyum.log'}")
+        finally:
+            shown["busy"] = False
+
+    sys.excepthook = hook
+    threading.excepthook = lambda a: log.error("Errore in un thread", exc_info=(a.exc_type, a.exc_value, a.exc_traceback))
 
 
 def main() -> None:
     app = QApplication(sys.argv)
+    _install_excepthooks()
     app.setApplicationName("Audyum")
     app.setWindowIcon(QIcon(str(Path(__file__).parent / "icon.png")))
     ui = ui_settings.load()

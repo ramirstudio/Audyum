@@ -52,5 +52,5 @@ class Engine(abc.ABC):
     ) -> list[np.ndarray]:
         """Una traccia float32 (canali, campioni) per ogni seme."""
 
-    def unload(self) -> None:
+    def unload(self) -> None:  # noqa: B027 - facoltativo: i motori senza memoria da liberare lo ignorano
         pass

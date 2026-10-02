@@ -7,16 +7,12 @@ echo  Audyum: preparo Python 3.11, PyTorch con CUDA 12.8 e MMAudio.
 echo  Servono circa 4 GB di download e 15 GB liberi sul disco di installazione durante l'operazione.
 echo.
 
-rem Resti di tentativi precedenti (anche su C:): si cancellano per liberare spazio.
-if exist "%~dp0python" rmdir /s /q "%~dp0python" >nul 2>&1
-for %%D in ("%LOCALAPPDATA%\Audyum\uv" "%LOCALAPPDATA%\Audyum\py" "%PUBLIC%\Audyum\uv" "%PUBLIC%\Audyum\py") do if exist "%%~D" rmdir /s /q "%%~D" >nul 2>&1
-
 rem Segnala al programma che e' installato: modelli e log vanno in <cartella>\data.
 echo installato> "%~dp0portable.txt"
 
-rem Python di uv e cache stanno nella cartella di installazione (stesso disco del venv). La cache NON viene svuotata se qualcosa va storto:
-rem un nuovo tentativo riparte dai pacchetti gia' scaricati. I file si collegano con hardlink
-rem (nessuna seconda copia di PyTorch sul disco).
+rem Python, cache e ambiente stanno nella cartella di installazione (stesso disco, niente sul disco C: se si
+rem sceglie un'altra unita'). La cache non viene svuotata se qualcosa va storto: un nuovo tentativo riparte
+rem dai pacchetti gia' scaricati. I file si collegano con hardlink: nessuna seconda copia di PyTorch.
 set "UVROOT=%~dp0data\uv"
 set "UV_DATA_DIR=%UVROOT%"
 set "UV_PYTHON_INSTALL_DIR=%UVROOT%\python"

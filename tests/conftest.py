@@ -24,6 +24,40 @@ def make_video(path: Path, seconds: float, fps: int = 25, codec: str = "mpeg4", 
     return path
 
 
+def make_asym_video(path: Path, seconds: float = 2.0, fps: int = 25, size=(96, 64)) -> Path:
+    """Metà sinistra rossa, metà destra blu, riquadro verde in alto a sinistra: l'orientamento si riconosce."""
+    w, h = size
+    img = np.zeros((h, w, 3), np.uint8)
+    img[:, : w // 2] = (230, 20, 20)
+    img[:, w // 2 :] = (20, 20, 230)
+    img[: h // 4, : w // 2] = (20, 230, 20)
+    with av.open(str(path), "w") as out:
+        st = out.add_stream("mpeg4", rate=Fraction(fps))
+        st.width, st.height, st.pix_fmt = w, h, "yuv420p"
+        for _ in range(int(seconds * fps)):
+            for p in st.encode(av.VideoFrame.from_ndarray(img, format="rgb24")):
+                out.mux(p)
+        for p in st.encode(None):
+            out.mux(p)
+    return path
+
+
+def set_mp4_rotation(path: Path, degrees: int) -> None:
+    """Sostituisce la matrice identità del contenitore mp4 con una rotazione (come fanno i telefoni)."""
+    import math
+    import struct
+
+    fix = lambda v: struct.pack(">i", int(round(v * 65536)))  # noqa: E731
+    ident = b"".join(fix(v) for v in (1, 0, 0, 0, 1, 0, 0, 0)) + struct.pack(">i", 0x40000000)
+    a = math.radians(degrees)
+    rot = b"".join(fix(v) for v in (math.cos(a), -math.sin(a), 0, math.sin(a), math.cos(a), 0, 0, 0)) \
+        + struct.pack(">i", 0x40000000)
+    data = path.read_bytes()
+    i = data.rfind(ident)  # la matrice della traccia (tkhd) segue quella del filmato (mvhd): ffmpeg le compone
+    assert i > 0
+    path.write_bytes(data[:i] + rot + data[i + len(ident):])
+
+
 class ToneEngine(Engine):
     """Motore finto: un tono diverso per ogni seme, lungo esattamente quanto la finestra."""
 

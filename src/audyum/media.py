@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import dataclasses
+import math
+import struct
 import threading
 from fractions import Fraction
 from pathlib import Path
@@ -33,10 +35,22 @@ class VideoInfo:
     path: Path
     duration: float
     fps: float
-    width: int
+    width: int  # come lo vede chi guarda il video, già tenendo conto della rotazione
     height: int
     codec: str
     has_audio: bool
+    rotation: int = 0  # gradi in senso antiorario da applicare ai fotogrammi per mostrarli dritti: 0, 90, 180, 270
+
+
+def _frame_rotation(frame: av.VideoFrame) -> int:
+    """Rotazione dichiarata dal video (matrice di visualizzazione, tipica dei video da telefono)."""
+    for sd in frame.side_data:
+        if str(sd.type).endswith("DISPLAYMATRIX"):
+            m = struct.unpack("<9i", bytes(sd))
+            a, b = m[0] / 65536, m[1] / 65536
+            if a or b:
+                return (round(-math.degrees(math.atan2(b, a)) / 90) % 4) * 90
+    return 0
 
 
 @dataclasses.dataclass
@@ -49,7 +63,7 @@ class SampledVideo:
 
     def window(self, start: float, duration: float) -> list[np.ndarray]:
         out = []
-        for arr, spec in zip(self.streams, self.specs):
+        for arr, spec in zip(self.streams, self.specs, strict=True):
             i0 = int(round(start * spec.fps))
             out.append(arr[i0 : i0 + int(spec.fps * duration)])
         return out
@@ -68,14 +82,22 @@ def probe(path: Path | str) -> VideoInfo:
             duration = c.duration / av.time_base
         else:
             duration = float(s.frames / fps) if s.frames else 0.0
+        rotation = 0
+        for frame in c.decode(s):
+            rotation = _frame_rotation(frame)
+            break
+        w, h = s.codec_context.width, s.codec_context.height
+        if rotation in (90, 270):
+            w, h = h, w
         return VideoInfo(
             path=path,
             duration=duration,
             fps=fps,
-            width=s.codec_context.width,
-            height=s.codec_context.height,
+            width=w,
+            height=h,
             codec=s.codec_context.name,
             has_audio=bool(c.streams.audio),
+            rotation=rotation,
         )
 
 
@@ -103,6 +125,7 @@ def sample_frames(
     streams: list[list[np.ndarray]] = [[] for _ in specs]
     next_t = [0.0 for _ in specs]
     first_t: Optional[float] = None
+    rot_k = 0  # quarti di giro antiorari: i modelli devono vedere il video dritto
     last_rel = 0.0
     with av.open(str(path)) as c:
         vs = c.streams.video[0]
@@ -116,6 +139,7 @@ def sample_frames(
                 continue
             if first_t is None:
                 first_t = frame.time
+                rot_k = _frame_rotation(frame) // 90
             rel = frame.time - first_t
             last_rel = max(last_rel, rel)
             for i, spec in enumerate(specs):
@@ -123,6 +147,9 @@ def sample_frames(
                 while rel >= next_t[i] - 1e-6:
                     if img is None:
                         img = _resize(frame, spec)
+                        if rot_k:
+                            # Il quadrato centrale è invariante per rotazione: ruotarlo dopo il ritaglio è equivalente.
+                            img = np.ascontiguousarray(np.rot90(img, rot_k))
                     streams[i].append(img)
                     next_t[i] += 1.0 / spec.fps
             if progress is not None and total:
@@ -130,7 +157,7 @@ def sample_frames(
     if first_t is None:
         raise ValueError("Impossibile decodificare i fotogrammi del video.")
     arrays = [np.stack(s) for s in streams]
-    duration = min(len(a) / spec.fps for a, spec in zip(arrays, specs))
+    duration = min(len(a) / spec.fps for a, spec in zip(arrays, specs, strict=True))
     return SampledVideo(
         streams=arrays,
         specs=list(specs),

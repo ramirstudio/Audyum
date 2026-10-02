@@ -9,6 +9,11 @@ on:
 permissions:
   contents: write
 
+# Un push nuovo annulla la compilazione ancora in corso dello stesso branch.
+concurrency:
+  group: installer-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -47,7 +52,7 @@ jobs:
           Copy-Item (Get-Command uv).Source installer\bin\uv.exe
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
-          $version = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}".TrimStart("v") } else { "0.1.0" }
+          $version = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}".TrimStart("v") } else { "1.0.0" }
           & $iscc "/DAppVersion=$version" installer\audyum.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 

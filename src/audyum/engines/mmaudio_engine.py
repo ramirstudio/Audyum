@@ -85,7 +85,7 @@ class MMAudioEngine(Engine):
         files = self._files()
         for i, (key, item) in enumerate(files, 1):
             step = f" ({i}/{len(files)})"
-            self._paths[key] = fetch_url(item, lambda msg, f: progress(msg + step, f), cancel)
+            self._paths[key] = fetch_url(item, lambda msg, f, step=step: progress(msg + step, f), cancel)
         # La cache Hugging Face delle versioni precedenti (circa 9 GB) non serve più.
         remove_old_hf_cache(hf_home() / "hub")
 
@@ -146,8 +146,11 @@ class MMAudioEngine(Engine):
     def unload(self) -> None:
         self._net = self._fu = None
         try:
+            import gc
+
             import torch
 
+            gc.collect()
             torch.cuda.empty_cache()
         except Exception:
             pass
@@ -192,7 +195,7 @@ class MMAudioEngine(Engine):
                 x0 = torch.randn(1, net.latent_seq_len, net.latent_dim, device=device, dtype=dtype, generator=rng)
                 calls = 0
 
-                def ode(t, x):
+                def ode(t, x, v=v):
                     nonlocal calls
                     if cancel is not None and cancel.is_set():
                         raise Cancelled()

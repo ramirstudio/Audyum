@@ -22,13 +22,13 @@ def hex_to_rgb(c: str) -> tuple[int, int, int]:
 
 
 def rgb_to_hex(r: float, g: float, b: float) -> str:
-    return "#%02X%02X%02X" % tuple(max(0, min(255, round(v))) for v in (r, g, b))
+    return "#" + "".join(f"{max(0, min(255, round(v))):02X}" for v in (r, g, b))
 
 
 def mix(a: str, b: str, t: float) -> str:
     """t=0 restituisce a, t=1 restituisce b."""
     ra, rb = hex_to_rgb(a), hex_to_rgb(b)
-    return rgb_to_hex(*(x + (y - x) * t for x, y in zip(ra, rb)))
+    return rgb_to_hex(*(x + (y - x) * t for x, y in zip(ra, rb, strict=True)))
 
 
 def lighten(c: str, t: float) -> str:
@@ -65,7 +65,7 @@ class UISettings:
             return self.bg2
         return "#0B0612"
 
-    def validated(self) -> "UISettings":
+    def validated(self) -> UISettings:
         d = dataclasses.asdict(self)
         ref = UISettings()
         for k, v in d.items():
