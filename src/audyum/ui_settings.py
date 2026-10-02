@@ -93,6 +93,7 @@ PRESET_NAMES = {
     "bosco": "Bosco",
     "ambra": "Ambra",
     "grafite": "Grafite",
+    "notte": "Notte",
 }
 
 PRESETS: dict[str, UISettings] = {
@@ -109,6 +110,9 @@ PRESETS: dict[str, UISettings] = {
     "grafite": UISettings(
         preset="grafite", bg_mode="solid", bg_solid="#17171A", glow=False,
         accent_mode="solid", accent1="#E9E3D8", accent2="#E9E3D8"),
+    "notte": UISettings(
+        preset="notte", bg_mode="solid", bg_solid="#000000", glow=False,
+        accent_mode="solid", accent1="#0A84FF", accent2="#0A84FF"),
 }
 
 

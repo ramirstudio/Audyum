@@ -149,7 +149,7 @@ def paint_backdrop(p: QPainter, rect: QRect, ui: UISettings, reference: QPixmap,
         scale = max(w / image.width(), h / image.height())
         iw, ih = image.width() * scale, image.height() * scale
         p.drawPixmap(QRectF(rect.x() + (w - iw) / 2, rect.y() + (h - ih) / 2, iw, ih), image, QRectF(image.rect()))
-        p.fillRect(rect, QColor(0, 0, 0, 120))
+        p.fillRect(rect, QColor(0, 0, 0, 175))
     else:
         a = math.radians(ui.bg_angle)
         dx, dy = math.sin(a), math.cos(a)
@@ -179,6 +179,7 @@ class Backdrop:
         self.image: QPixmap | None = None
         self.ui = ui
         self._cache: QPixmap | None = None
+        self._cache_key: tuple | None = None
         self.set(ui)
 
     def set(self, ui: UISettings) -> None:
@@ -188,17 +189,19 @@ class Backdrop:
         self._cache = None
 
     def paint(self, widget: QWidget, region: QRect | None = None) -> None:
-        # Lo sfondo scalato si calcola una volta per dimensione della finestra; a ogni ridisegno
-        # (per esempio a ogni fotogramma del video) si copia solo la parte da aggiornare.
-        size = widget.size()
-        if getattr(self, "_cache", None) is None or self._cache.size() != size:
-            self._cache = QPixmap(size)
-            cp = QPainter(self._cache)
-            paint_backdrop(cp, self._cache.rect(), self.ui, self.reference, self.image)
+        # Lo sfondo si disegna una volta per dimensione e scala dello schermo (125%, 150%...) e poi si copia:
+        # niente ricalcolo a ogni fotogramma del video, e niente ingrandimento sfocato sugli schermi ad alta densità.
+        dpr = widget.devicePixelRatioF()
+        key = (widget.width(), widget.height(), dpr)
+        if self._cache is None or self._cache_key != key:
+            cache = QPixmap(int(widget.width() * dpr), int(widget.height() * dpr))
+            cache.setDevicePixelRatio(dpr)
+            cp = QPainter(cache)
+            paint_backdrop(cp, QRect(0, 0, widget.width(), widget.height()), self.ui, self.reference, self.image)
             cp.end()
+            self._cache, self._cache_key = cache, key
         p = QPainter(widget)
-        r = region or widget.rect()
-        p.drawPixmap(r, self._cache, r)
+        p.drawPixmap(0, 0, self._cache)  # il clip dell'evento di disegno limita la parte aggiornata
         p.end()
 
 
